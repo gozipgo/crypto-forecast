@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -34,7 +34,7 @@ jobs:
         run: python -m engine.run --out site/data || (sleep 60 && python -m engine.run --out site/data)
       - name: 스키마 파일도 함께 공개
         run: mkdir -p site/schema && cp schema/*.json site/schema/
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
       - name: 요약 출력
@@ -48,7 +48,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
   keepalive:
     # 저장소에 60일간 커밋이 없으면 GitHub가 예약 실행을 끈다 → 하루 한 번 워크플로를 다시 '활성화'해 타이머 초기화
