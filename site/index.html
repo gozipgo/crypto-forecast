@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>코인 확률 전망</title>
+  <meta name="description" content="BTC·ETH 기술적 분석과 7/14/30일 가격 확률 분포">
+  <meta name="theme-color" content="#0b0f17" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="코인전망">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // 테마를 첫 그리기 전에 적용(깜빡임 방지)
+    try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="top">
+    <div class="top-row">
+      <div class="seg seg-asset" role="tablist" aria-label="자산">
+        <button role="tab" data-asset="BTC" aria-selected="true">BTC</button>
+        <button role="tab" data-asset="ETH" aria-selected="false">ETH</button>
+      </div>
+      <button class="icon-btn" id="themeBtn" aria-label="화면 모드 전환" title="화면 모드">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.4A5.5 5.5 0 0 1 13.4 3.1 9 9 0 0 0 12 3z"/></svg>
+        <span id="themeLabel">자동</span>
+      </button>
+    </div>
+    <div class="quote">
+      <div class="price-line">
+        <span class="price" id="price">—</span>
+        <span class="chg" id="chg"></span>
+        <span class="badge" id="trendBadge"></span>
+      </div>
+      <div class="updated" id="updated">불러오는 중…</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="controls" aria-label="보기 설정">
+      <div class="ctl">
+        <span class="ctl-label">봉</span>
+        <div class="seg" data-ctl="tf">
+          <button data-v="1h">1시간</button><button data-v="4h">4시간</button><button data-v="1d">일</button>
+        </div>
+      </div>
+      <div class="ctl">
+        <span class="ctl-label">예측</span>
+        <div class="seg" data-ctl="horizon">
+          <button data-v="7">7일</button><button data-v="14">14일</button><button data-v="30">30일</button>
+        </div>
+      </div>
+      <div class="ctl">
+        <span class="ctl-label">모델</span>
+        <div class="seg" data-ctl="model">
+          <button data-v="ensemble">혼합</button><button data-v="montecarlo">몬테카를로</button><button data-v="analog">유사 패턴</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="chart-wrap">
+      <div id="chart" class="chart"></div>
+      <div class="legend" id="legend"></div>
+      <div class="chart-keys">
+        <span><i class="k k95"></i>95%</span><span><i class="k k80"></i>80%</span><span><i class="k k50"></i>50%</span>
+        <span><i class="k kmed"></i>중앙값</span>
+        <span><i class="k kma20"></i>MA20</span><span><i class="k kma50"></i>MA50</span><span><i class="k kma200"></i>MA200</span>
+      </div>
+      <p class="hint">두 손가락으로 확대·축소, 좌우로 밀어 이동. 차트를 누르면 그 시점 값이 보여요.</p>
+    </section>
+
+    <section class="card" id="scenarioCard">
+      <h2 id="scenarioTitle">시나리오</h2>
+      <div class="dist" id="distLine"></div>
+      <div class="scen" id="scenarios"></div>
+    </section>
+
+    <section class="card">
+      <h2>모델 비교 <small id="cmpH"></small></h2>
+      <div class="table-wrap"><table class="tbl" id="cmpTable"></table></div>
+      <p class="note" id="cmpNote"></p>
+    </section>
+
+    <section class="card">
+      <h2>지지선·저항선 도달 확률 <small id="lvH"></small></h2>
+      <div class="table-wrap"><table class="tbl" id="levelTable"></table></div>
+      <p class="note">기간 안에 장중 고가·저가가 한 번이라도 그 가격에 닿을 확률.</p>
+    </section>
+
+    <section class="card">
+      <h2>지표 요약 <small id="indTf"></small></h2>
+      <div class="trend-box" id="trendBox"></div>
+      <ul class="ind" id="indicators"></ul>
+    </section>
+
+    <section class="card" id="analogCard">
+      <h2>지금과 가장 비슷했던 과거</h2>
+      <div class="table-wrap"><table class="tbl" id="analogTable"></table></div>
+      <p class="note" id="analogNote"></p>
+    </section>
+
+    <section class="card">
+      <h2>신뢰성 (백테스트) <small id="calH"></small></h2>
+      <div id="calib"></div>
+      <p class="note" id="calNote"></p>
+    </section>
+
+    <p class="meta" id="meta"></p>
+  </main>
+
+  <footer class="disclaimer" id="disclaimer">투자 조언이 아니며, 확률은 과거 데이터에 기반한 통계적 추정입니다.</footer>
+
+  <script src="vendor/lightweight-charts.standalone.production.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

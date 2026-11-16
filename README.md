@@ -9,7 +9,7 @@ BTC·ETH 기술적 분석과 7/14/30일 가격 **확률 분포(fan chart)** 를 
 - [x] ① 조사·설계 — [docs/DESIGN.md](docs/DESIGN.md)
 - [x] ② 데이터 수집과 지표 계산
 - [x] ③ 확률 모델과 백테스트
-- [ ] ④ 모바일 화면
+- [x] ④ 모바일 화면
 - [ ] ⑤ 배포
 
 ## 구조 (요약)
@@ -17,7 +17,34 @@ BTC·ETH 기술적 분석과 7/14/30일 가격 **확률 분포(fan chart)** 를 
 - `site/` — 화면. JSON을 **읽기만** 하는 정적 HTML/JS.
 - `schema/`, `docs/SCHEMA.md` — 결과 JSON 형식(버전 관리). SwiftUI 앱·위젯도 같은 JSON 사용.
 
-자세한 실행 방법과 JSON 형식은 단계가 진행되면서 채워집니다.
+
+## 로컬에서 실행
+```powershell
+# 1) 준비 (처음 한 번)
+py -3.12 -m venv .venv            # 또는: python -m venv .venv
+.venv\Scripts\pip install -r requirements-dev.txt
+
+# 2) 데이터 수집·계산 → site/data/*.json  (약 20초)
+.venv\Scripts\python -m engine.run --out site/data
+#    개발 중 반복 실행 시 캔들 캐시(분): --cache 60
+
+# 3) 화면 띄우기
+.venv\Scripts\python -m http.server 8000 -d site
+#    → 브라우저에서 http://localhost:8000
+
+# 테스트
+.venv\Scripts\python -m pytest -q
+```
+
+### PC에서 아이폰 화면 크기로 보기
+1. Chrome 또는 Edge에서 `http://localhost:8000` 열기
+2. `F12` → `Ctrl+Shift+M`(기기 툴바) → 상단 기기 목록에서 **iPhone 14 Pro Max / iPhone 12 Pro** 등 선택
+3. 다크 모드 확인: 개발자 도구 `Ctrl+Shift+P` → "Rendering" → *Emulate CSS prefers-color-scheme: dark* (또는 화면 오른쪽 위 테마 버튼)
+
+### 실제 아이폰에서 (같은 Wi-Fi)
+1. PC IP 확인: `ipconfig` → IPv4 주소(예: 192.168.0.12)
+2. `python -m http.server 8000 -d site --bind 0.0.0.0` 로 실행, Windows 방화벽에서 Python 허용
+3. 아이폰 사파리에서 `http://192.168.0.12:8000`
 
 ## 데이터 소스 (API 키 불필요, 실패 시 자동으로 다음 소스)
 | 순위 | 소스 | 로컬(한국) | GitHub Actions(미국) | 비고 |
@@ -49,3 +76,11 @@ BTC·ETH 기술적 분석과 7/14/30일 가격 **확률 분포(fan chart)** 를 
 
 ## JSON 형식
 [docs/SCHEMA.md](docs/SCHEMA.md) 참고.
+
+## 화면
+- BTC/ETH 탭, 봉(1시간/4시간/일), 예측 기간(7/14/30일), 모델(혼합/몬테카를로/유사 패턴) 전환. 선택은 기기에 기억됩니다.
+- 차트: 캔들·MA20/50/200·거래량·지지/저항선 + 오른쪽 미래 구간에 **확률 전개(95/80/50% 음영, 점선=중앙값)**. 두 손가락 확대, 좌우 이동, 누르면 그 시점의 값(미래 구간이면 분위수) 표시.
+- 색은 한국식: **상승 빨강, 하락 파랑**.
+- 카드: 시나리오 확률, 모델 비교, 지지/저항 도달 확률, 지표 요약(선택한 봉 기준), 가장 비슷했던 과거 5개, 신뢰성(백테스트 포함률).
+- PWA: 사파리 공유 → **홈 화면에 추가** 하면 주소창 없이 앱처럼 열립니다. 아이콘은 `scripts/make_icons.py`로 생성.
+- 차트 라이브러리: TradingView Lightweight Charts v5.2.1 (Apache-2.0, `site/vendor/`에 라이선스 포함).
