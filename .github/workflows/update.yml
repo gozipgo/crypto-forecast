@@ -1,0 +1,65 @@
+name: update-and-deploy
+# 1시간마다: 데이터 수집 → 지표·확률 모델·백테스트 → JSON → GitHub Pages 배포.
+# 결과 JSON은 커밋하지 않고 Pages 아티팩트로만 배포한다(저장소 이력 비대화 방지).
+on:
+  schedule:
+    - cron: "7 * * * *"   # 매시 7분(UTC). 정각 혼잡 회피
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["engine/**", "site/**", "schema/**", "requirements.txt", ".github/workflows/update.yml"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: write   # keepalive(예약 실행 자동 비활성화 방지)
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 계산 (실패 시 1회 재시도)
+        run: python -m engine.run --out site/data || (sleep 60 && python -m engine.run --out site/data)
+      - name: 스키마 파일도 함께 공개
+        run: mkdir -p site/schema && cp schema/*.json site/schema/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: 요약 출력
+        run: python -c "import json;d=json.load(open('site/data/summary.json'));print(json.dumps(d,ensure_ascii=False,indent=1))" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  keepalive:
+    # 저장소에 60일간 커밋이 없으면 GitHub가 예약 실행을 끈다 → 하루 한 번 워크플로를 다시 '활성화'해 타이머 초기화
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 매일 00시대(UTC)에만 실행
+        if: ${{ startsWith(github.event.schedule, '7 ') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(date -u +%H)" = "00" ]; then
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/update.yml/enable" && echo "keepalive ok"
+          fi

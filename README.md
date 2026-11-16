@@ -3,6 +3,8 @@
 BTC·ETH 기술적 분석과 7/14/30일 가격 **확률 분포(fan chart)** 를 보여 주는 웹앱입니다.
 아이폰 사파리(홈 화면 추가 시 앱처럼 동작)를 우선으로 만들었습니다.
 
+**접속 주소: https://gozipgo.github.io/crypto-forecast/** (1시간마다 자동 업데이트)
+
 > ⚠️ 투자 조언이 아니며, 확률은 과거 데이터에 기반한 통계적 추정입니다.
 
 ## 진행 상황
@@ -10,7 +12,7 @@ BTC·ETH 기술적 분석과 7/14/30일 가격 **확률 분포(fan chart)** 를 
 - [x] ② 데이터 수집과 지표 계산
 - [x] ③ 확률 모델과 백테스트
 - [x] ④ 모바일 화면
-- [ ] ⑤ 배포
+- [x] ⑤ 배포
 
 ## 구조 (요약)
 - `engine/` — 계산(데이터 수집 → 지표 → 확률 모델 → 백테스트 → JSON). Python.
@@ -84,3 +86,34 @@ py -3.12 -m venv .venv            # 또는: python -m venv .venv
 - 카드: 시나리오 확률, 모델 비교, 지지/저항 도달 확률, 지표 요약(선택한 봉 기준), 가장 비슷했던 과거 5개, 신뢰성(백테스트 포함률).
 - PWA: 사파리 공유 → **홈 화면에 추가** 하면 주소창 없이 앱처럼 열립니다. 아이콘은 `scripts/make_icons.py`로 생성.
 - 차트 라이브러리: TradingView Lightweight Charts v5.2.1 (Apache-2.0, `site/vendor/`에 라이선스 포함).
+
+## 배포와 자동 업데이트 (비용 0원, API 키 없음)
+- `.github/workflows/update.yml`: 매시 7분(UTC)마다 계산 → `site/`를 GitHub Pages로 배포. 수동 실행: Actions 탭 → *update-and-deploy* → *Run workflow*.
+- 결과 JSON은 커밋하지 않고 Pages에만 올립니다. 계산이 실패하면 배포하지 않으므로 직전 결과가 그대로 유지되고, 화면에 "업데이트가 늦어지고 있어요"가 표시됩니다(2.5시간 초과 시).
+- GitHub는 60일간 커밋이 없으면 예약 실행을 끕니다 → 같은 워크플로의 `keepalive` 작업이 하루 한 번 다시 활성화합니다.
+- GitHub 예약 실행은 혼잡 시 수 분~수십 분 늦어질 수 있습니다.
+- 다른 워크플로: `test`(push마다 pytest), `probe-sources`(데이터 소스 실측, 수동).
+
+## 폴더 구조
+```
+engine/            계산 (Python)
+  sources/         데이터 소스 + 폴백 체인
+  indicators.py    MA·RSI·MACD·볼린저·ATR·ADX·거래량
+  levels.py        지지/저항   trend.py 추세   narrative.py 한국어 요약
+  models/          montecarlo.py · analog.py · ensemble.py · common.py
+  backtest.py      워크포워드 보정도 + 재보정
+  schema.py        JSON 스키마 검증     run.py 진입점
+site/              화면 (정적 HTML/JS, data/ 는 생성물)
+schema/            JSON Schema (배포 시 site/schema/ 로 공개)
+docs/              DESIGN.md(조사·설계), SCHEMA.md(JSON 형식)
+scripts/           probe_sources.py, make_icons.py
+tests/             pytest
+```
+
+## SwiftUI 앱·위젯에서 쓰기
+- 위젯: `https://gozipgo.github.io/crypto-forecast/data/summary.json` (1KB 내외)
+- 앱: `manifest.json` → `{자산}/forecast.json`, `{자산}/candles_{1h,4h,1d}.json`
+- `schema_version`의 major가 1이 아니면 업데이트 안내. 필드 설명은 [docs/SCHEMA.md](docs/SCHEMA.md).
+
+## 참고한 오픈소스
+[docs/DESIGN.md](docs/DESIGN.md)의 조사표 참고. 코드를 가져다 쓴 것은 TradingView Lightweight Charts(Apache-2.0)뿐이고, 나머지는 방법·아이디어만 참고했습니다.
