@@ -1,0 +1,687 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gozipgo.github.io/crypto-forecast/schema/forecast.v1.schema.json",
+  "title": "crypto-forecast 결과 JSON v1",
+  "description": "forecast.json / summary.json / manifest.json / candles_*.json 정의. 하위호환 추가는 minor, 삭제·의미 변경은 major.",
+  "$defs": {
+    "prob": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "price": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "isoTime": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$"
+    },
+    "signal": {
+      "enum": [
+        "bullish",
+        "bearish",
+        "neutral",
+        "overbought",
+        "oversold"
+      ]
+    },
+    "trend": {
+      "type": "object",
+      "required": [
+        "state",
+        "label_ko",
+        "text_ko",
+        "adx",
+        "score"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "strong_up",
+            "up",
+            "sideways",
+            "down",
+            "strong_down"
+          ]
+        },
+        "label_ko": {
+          "type": "string"
+        },
+        "text_ko": {
+          "type": "string"
+        },
+        "adx": {
+          "type": "number"
+        },
+        "score": {
+          "type": "integer"
+        },
+        "sma50_slope_10": {
+          "type": "number"
+        }
+      }
+    },
+    "indicatorItem": {
+      "type": "object",
+      "required": [
+        "signal",
+        "text_ko"
+      ],
+      "properties": {
+        "signal": {
+          "$ref": "#/$defs/signal"
+        },
+        "text_ko": {
+          "type": "string"
+        }
+      }
+    },
+    "technical": {
+      "type": "object",
+      "required": [
+        "trend",
+        "indicators"
+      ],
+      "properties": {
+        "trend": {
+          "$ref": "#/$defs/trend"
+        },
+        "indicators": {
+          "type": "object",
+          "required": [
+            "ma",
+            "rsi14",
+            "macd",
+            "bollinger",
+            "volume"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/indicatorItem"
+          }
+        }
+      }
+    },
+    "quantiles": {
+      "type": "object",
+      "required": [
+        "p2_5",
+        "p10",
+        "p25",
+        "p50",
+        "p75",
+        "p90",
+        "p97_5"
+      ],
+      "additionalProperties": {
+        "$ref": "#/$defs/price"
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "required": [
+        "key",
+        "label_ko",
+        "prob"
+      ],
+      "properties": {
+        "key": {
+          "enum": [
+            "up",
+            "flat",
+            "down"
+          ]
+        },
+        "label_ko": {
+          "type": "string"
+        },
+        "prob": {
+          "$ref": "#/$defs/prob"
+        }
+      }
+    },
+    "horizon": {
+      "type": "object",
+      "required": [
+        "quantiles",
+        "prob_up",
+        "expected_return",
+        "threshold",
+        "scenarios",
+        "level_touch"
+      ],
+      "properties": {
+        "quantiles": {
+          "$ref": "#/$defs/quantiles"
+        },
+        "prob_up": {
+          "$ref": "#/$defs/prob"
+        },
+        "expected_return": {
+          "type": "number"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scenario"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "level_touch": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "price",
+              "type",
+              "prob"
+            ],
+            "properties": {
+              "price": {
+                "$ref": "#/$defs/price"
+              },
+              "type": {
+                "enum": [
+                  "support",
+                  "resistance"
+                ]
+              },
+              "prob": {
+                "$ref": "#/$defs/prob"
+              }
+            }
+          }
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "label_ko",
+        "info",
+        "calibrated",
+        "horizons",
+        "path_daily"
+      ],
+      "properties": {
+        "label_ko": {
+          "type": "string"
+        },
+        "info": {
+          "type": "object"
+        },
+        "calibrated": {
+          "type": "boolean"
+        },
+        "horizons": {
+          "type": "object",
+          "required": [
+            "7",
+            "14",
+            "30"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/horizon"
+          }
+        },
+        "path_daily": {
+          "type": "array",
+          "minItems": 30,
+          "maxItems": 30,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/quantiles"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "day"
+                ],
+                "properties": {
+                  "day": {
+                    "type": "integer"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": [
+        "cov50",
+        "cov80",
+        "cov95"
+      ],
+      "additionalProperties": {
+        "$ref": "#/$defs/prob"
+      }
+    },
+    "calibrationCell": {
+      "type": "object",
+      "required": [
+        "n",
+        "period",
+        "raw",
+        "adjusted",
+        "reason_ko",
+        "after",
+        "interval_map",
+        "recal",
+        "test_half",
+        "pit_hist"
+      ],
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "raw": {
+          "$ref": "#/$defs/coverage"
+        },
+        "after": {
+          "$ref": "#/$defs/coverage"
+        },
+        "adjusted": {
+          "type": "boolean"
+        },
+        "reason_ko": {
+          "type": "string"
+        },
+        "interval_map": {
+          "type": "object"
+        },
+        "recal": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "c",
+                "c_raw"
+              ]
+            }
+          ]
+        },
+        "test_half": {
+          "type": "object",
+          "required": [
+            "from",
+            "raw",
+            "adjusted"
+          ]
+        },
+        "pit_hist": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 10,
+          "maxItems": 10
+        }
+      }
+    },
+    "forecast": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "asset",
+        "quote",
+        "sources",
+        "generated_at",
+        "last_candle_at",
+        "price",
+        "change_24h",
+        "trend",
+        "technicals",
+        "levels",
+        "forecast_origin",
+        "forecasts",
+        "calibration",
+        "disclaimer_ko"
+      ],
+      "properties": {
+        "schema_version": {
+          "$ref": "#/$defs/schemaVersion"
+        },
+        "asset": {
+          "enum": [
+            "BTC",
+            "ETH"
+          ]
+        },
+        "quote": {
+          "const": "USD"
+        },
+        "sources": {
+          "type": "object",
+          "required": [
+            "1h",
+            "4h",
+            "1d"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "generated_at": {
+          "$ref": "#/$defs/isoTime"
+        },
+        "last_candle_at": {
+          "$ref": "#/$defs/isoTime"
+        },
+        "price": {
+          "$ref": "#/$defs/price"
+        },
+        "change_24h": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "atr_1d": {
+          "type": "number"
+        },
+        "trend": {
+          "$ref": "#/$defs/trend"
+        },
+        "technicals": {
+          "type": "object",
+          "required": [
+            "1h",
+            "4h",
+            "1d"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/technical"
+          }
+        },
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "type",
+              "price",
+              "strength",
+              "touches",
+              "distance_pct"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "support",
+                  "resistance"
+                ]
+              },
+              "price": {
+                "$ref": "#/$defs/price"
+              },
+              "strength": {
+                "$ref": "#/$defs/prob"
+              },
+              "touches": {
+                "type": "integer"
+              },
+              "distance_pct": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "forecast_origin": {
+          "type": "object",
+          "required": [
+            "price",
+            "time"
+          ]
+        },
+        "forecasts": {
+          "type": "object",
+          "required": [
+            "montecarlo",
+            "analog",
+            "ensemble"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/model"
+          }
+        },
+        "calibration": {
+          "type": "object",
+          "required": [
+            "method",
+            "period",
+            "target",
+            "models"
+          ],
+          "properties": {
+            "models": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "7",
+                  "14",
+                  "30"
+                ],
+                "additionalProperties": {
+                  "$ref": "#/$defs/calibrationCell"
+                }
+              }
+            }
+          }
+        },
+        "disclaimer_ko": {
+          "type": "string"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "generated_at",
+        "assets",
+        "disclaimer_ko"
+      ],
+      "properties": {
+        "schema_version": {
+          "$ref": "#/$defs/schemaVersion"
+        },
+        "generated_at": {
+          "$ref": "#/$defs/isoTime"
+        },
+        "assets": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "price",
+              "change_24h",
+              "trend",
+              "trend_label_ko",
+              "horizon_days",
+              "median_14d",
+              "range80_14d",
+              "scenarios_14d",
+              "prob_up_14d"
+            ],
+            "properties": {
+              "scenarios_14d": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/scenario"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "generated_at",
+        "assets",
+        "summary",
+        "files"
+      ],
+      "properties": {
+        "schema_version": {
+          "$ref": "#/$defs/schemaVersion"
+        },
+        "generated_at": {
+          "$ref": "#/$defs/isoTime"
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "candles": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "asset",
+        "interval",
+        "t",
+        "o",
+        "h",
+        "l",
+        "c",
+        "v",
+        "sma20",
+        "sma50",
+        "sma200",
+        "bb_upper",
+        "bb_lower"
+      ],
+      "properties": {
+        "schema_version": {
+          "$ref": "#/$defs/schemaVersion"
+        },
+        "interval": {
+          "enum": [
+            "1h",
+            "4h",
+            "1d"
+          ]
+        },
+        "t": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "o": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "h": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "l": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "c": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "v": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "sma20": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "sma50": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "sma200": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "bb_upper": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "bb_lower": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$comment": "파일별 루트: #/$defs/forecast, #/$defs/summary, #/$defs/manifest, #/$defs/candles"
+}
