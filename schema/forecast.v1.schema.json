@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gozipgo.github.io/crypto-forecast/schema/forecast.v1.schema.json",
   "title": "crypto-forecast 결과 JSON v1",
-  "description": "forecast.json / summary.json / manifest.json / candles_*.json 정의. 하위호환 추가는 minor, 삭제·의미 변경은 major.",
+  "description": "forecast.json / summary.json / manifest.json / candles_*.json 정의. 하위호환 추가는 minor, 삭제·의미 변경은 major. v1.1.0: 주봉·월봉, long_term(최대 5년) 추가.",
   "$defs": {
     "prob": {
       "type": "number",
@@ -350,7 +350,8 @@
         "forecast_origin",
         "forecasts",
         "calibration",
-        "disclaimer_ko"
+        "disclaimer_ko",
+        "long_term"
       ],
       "properties": {
         "schema_version": {
@@ -370,7 +371,9 @@
           "required": [
             "1h",
             "4h",
-            "1d"
+            "1d",
+            "1w",
+            "1M"
           ],
           "additionalProperties": {
             "type": "string"
@@ -402,7 +405,9 @@
           "required": [
             "1h",
             "4h",
-            "1d"
+            "1d",
+            "1w",
+            "1M"
           ],
           "additionalProperties": {
             "$ref": "#/$defs/technical"
@@ -486,6 +491,9 @@
         },
         "disclaimer_ko": {
           "type": "string"
+        },
+        "long_term": {
+          "$ref": "#/$defs/longTerm"
         }
       }
     },
@@ -581,7 +589,9 @@
           "enum": [
             "1h",
             "4h",
-            "1d"
+            "1d",
+            "1w",
+            "1M"
           ]
         },
         "t": {
@@ -679,6 +689,192 @@
               "null"
             ]
           }
+        }
+      }
+    },
+    "longHorizon": {
+      "type": "object",
+      "required": [
+        "label_ko",
+        "quantiles",
+        "prob_up",
+        "expected_return",
+        "threshold_factor",
+        "scenarios",
+        "level_touch"
+      ],
+      "properties": {
+        "label_ko": {
+          "type": "string"
+        },
+        "quantiles": {
+          "$ref": "#/$defs/quantiles"
+        },
+        "prob_up": {
+          "$ref": "#/$defs/prob"
+        },
+        "threshold_factor": {
+          "type": "number"
+        },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scenario"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "fanPoint": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/quantiles"
+        },
+        {
+          "type": "object",
+          "required": [
+            "t"
+          ],
+          "properties": {
+            "t": {
+              "type": "integer"
+            }
+          }
+        }
+      ]
+    },
+    "scenarioGroup": {
+      "type": "object",
+      "required": [
+        "rank",
+        "prob",
+        "label_ko",
+        "checkpoints",
+        "end_range80"
+      ],
+      "properties": {
+        "rank": {
+          "type": "integer"
+        },
+        "prob": {
+          "$ref": "#/$defs/prob"
+        },
+        "label_ko": {
+          "type": "string"
+        },
+        "checkpoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "day",
+              "price"
+            ]
+          }
+        },
+        "representative": {
+          "type": "object",
+          "required": [
+            "end_price",
+            "end_return",
+            "peak",
+            "trough",
+            "max_drawdown"
+          ]
+        },
+        "candles": {
+          "type": "object",
+          "required": [
+            "1w",
+            "1M"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "t",
+              "o",
+              "h",
+              "l",
+              "c"
+            ]
+          }
+        },
+        "text_ko": {
+          "type": "string"
+        }
+      }
+    },
+    "longTerm": {
+      "type": "object",
+      "required": [
+        "method_ko",
+        "horizons",
+        "fan",
+        "scenario_groups",
+        "top_scenarios",
+        "calibration"
+      ],
+      "properties": {
+        "horizons": {
+          "type": "object",
+          "required": [
+            "91",
+            "182",
+            "365",
+            "1095",
+            "1826"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/longHorizon"
+          }
+        },
+        "fan": {
+          "type": "object",
+          "required": [
+            "1w",
+            "1M"
+          ],
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/fanPoint"
+            }
+          }
+        },
+        "scenario_groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scenarioGroup"
+          }
+        },
+        "top_scenarios": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/scenarioGroup"
+              },
+              {
+                "required": [
+                  "representative",
+                  "candles",
+                  "text_ko"
+                ]
+              }
+            ]
+          }
+        },
+        "calibration": {
+          "type": "object",
+          "required": [
+            "91",
+            "182",
+            "365",
+            "note_ko"
+          ]
         }
       }
     }

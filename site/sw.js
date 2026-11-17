@@ -1,5 +1,5 @@
 // 오프라인 대비용 서비스 워커. 항상 네트워크 우선(최신 데이터·화면), 실패할 때만 캐시.
-const CACHE = 'cf-v1';
+const CACHE = 'cf-v2';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'chart.js', 'fan-primitive.js',
   'vendor/lightweight-charts.standalone.production.js', 'manifest.webmanifest', 'icons/icon-192.png'];
 

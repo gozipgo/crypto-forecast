@@ -16,11 +16,12 @@ from . import backtest
 from .schema import validate
 from . import levels as levels_mod
 from .data import load_asset
-from .models import analog, ensemble, montecarlo
+from .models import analog, ensemble, longterm, montecarlo
 from .models.common import HORIZONS, recalibrate, summarize
 from .technicals import analyze_tf, candles_payload
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
+TIMEFRAMES = ("1h", "4h", "1d", "1w", "1M")
 ASSETS = ["BTC", "ETH"]
 DISCLAIMER = "투자 조언이 아니며, 확률은 과거 데이터에 기반한 통계적 추정입니다."
 log = logging.getLogger("engine")
@@ -45,7 +46,7 @@ def build_asset(asset: str, out: Path, cache_min: float, generated_at: str) -> d
     h1 = data["1h"]
     price = float(h1["close"].iloc[-1])
     technicals, inds = {}, {}
-    for tf in ("1h", "4h", "1d"):
+    for tf in TIMEFRAMES:
         ind, tech = analyze_tf(data[tf], tf)
         inds[tf], technicals[tf] = ind, tech
         write_json(out / asset / f"candles_{tf}.json",
@@ -75,6 +76,13 @@ def build_asset(asset: str, out: Path, cache_min: float, generated_at: str) -> d
         }
     first = cal["montecarlo"]["7"]["period"]
 
+    # 장기(주봉·월봉, 최대 5년)
+    t2 = time.time()
+    now = h1.index[-1] + pd.Timedelta(hours=1)
+    long_term = longterm.forecast(daily, price, now, {"1w": data["1w"].index[-1], "1M": data["1M"].index[-1]}, lv)
+    long_term["calibration"] = longterm.backtest(daily)
+    log.info("%s 장기 전망 %.1fs", asset, time.time() - t2)
+
     # 24시간 변동: 1시간봉 기준 24봉 전 종가 대비
     chg24 = price / float(h1["close"].iloc[-25]) - 1 if len(h1) > 25 else None
     doc = {
@@ -93,6 +101,7 @@ def build_asset(asset: str, out: Path, cache_min: float, generated_at: str) -> d
         "forecast_origin": {"price": round(price, 2), "time": iso(h1.index[-1] + pd.Timedelta(hours=1)),
                             "daily_history_from": iso(daily.index[0]), "daily_history_to": iso(daily.index[-1])},
         "forecasts": forecasts,
+        "long_term": long_term,
         "calibration": {"method": "walk_forward", "step_days": 3, "period": [first[0], first[1]],
                         "target": {"cov50": 0.5, "cov80": 0.8, "cov95": 0.95}, "models": cal},
         "disclaimer_ko": DISCLAIMER,
@@ -130,6 +139,8 @@ def main(argv=None) -> None:
                             d["forecasts"]["ensemble"]["horizons"]["14"]["quantiles"]["p90"]],
             "scenarios_14d": d["forecasts"]["ensemble"]["horizons"]["14"]["scenarios"],
             "prob_up_14d": d["forecasts"]["ensemble"]["horizons"]["14"]["prob_up"],
+            "long_term_top": [{"label_ko": g["label_ko"], "prob": g["prob"],
+                               "end_price_5y": g["representative"]["end_price"]} for g in d["long_term"]["top_scenarios"]],
         } for a, d in docs.items()},
         "disclaimer_ko": DISCLAIMER,
     }, "summary")
@@ -139,7 +150,7 @@ def main(argv=None) -> None:
         "assets": assets,
         "summary": "summary.json",
         "files": {a: {"forecast": f"{a}/forecast.json",
-                      "candles": {tf: f"{a}/candles_{tf}.json" for tf in ("1h", "4h", "1d")}} for a in assets},
+                      "candles": {tf: f"{a}/candles_{tf}.json" for tf in TIMEFRAMES}} for a in assets},
         "build_seconds": round(time.time() - t0, 1),
     }, "manifest")
     log.info("완료: %s (%.1fs)", out, time.time() - t0)

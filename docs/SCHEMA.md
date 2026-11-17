@@ -1,4 +1,4 @@
-# 결과 JSON 형식 (schema_version 1.x)
+# 결과 JSON 형식 (schema_version 1.x, 현재 1.1.0)
 
 계산 엔진(`engine/`)이 만들고, 웹 화면·SwiftUI 앱·위젯·알림이 **읽기만** 하는 파일들입니다.
 기계용 정의는 [`schema/forecast.v1.schema.json`](../schema/forecast.v1.schema.json)(JSON Schema 2020-12)이며,
@@ -10,13 +10,18 @@
 - **major**(1.x → 2.0): 필드 삭제·이름/의미 변경. 앱은 major가 다르면 "업데이트 필요"를 표시하세요.
 - 공통 규칙: 시각은 UTC ISO-8601(`2026-11-17T05:00:00Z`) 또는 UNIX 초, 가격은 USD 숫자, 확률·비율은 0~1 소수.
 
+## 변경 이력
+- **1.1.0** (하위호환 추가): 주봉·월봉 `candles_1w.json`·`candles_1M.json`, `technicals.1w/1M`, `sources.1w/1M`,
+  `forecast.json`의 `long_term`(최대 5년 전망·시나리오), `summary.json`의 `long_term_top`.
+- **1.0.0**: 최초 버전.
+
 ## 파일 목록
 ```
 data/
   manifest.json        목차: 생성 시각, 자산, 파일 경로
   summary.json         위젯·알림용 초경량 요약(1KB 내외)
   BTC/forecast.json    지표 요약·지지/저항·모델별 확률 분포·보정도 (~30KB)
-  BTC/candles_1h.json  차트용 캔들(최근 720봉), candles_4h(540), candles_1d(1000)
+  BTC/candles_1h.json  차트용 캔들(최근 720봉), candles_4h(540), candles_1d(1000), candles_1w(600), candles_1M(240)
   ETH/...
 ```
 배포 주소 기준: `https://gozipgo.github.io/crypto-forecast/data/summary.json`
@@ -40,6 +45,7 @@ data/
  "disclaimer_ko":"투자 조언이 아니며, ..."}
 ```
 요약 수치는 **혼합(ensemble) 모델, 14일** 기준입니다.
+`long_term_top[2]`: 5년 시나리오 상위 2개 `{label_ko, prob, end_price_5y}` (위젯에서 "5년 시나리오" 표시용).
 
 ## {자산}/forecast.json
 | 필드 | 설명 |
@@ -72,6 +78,19 @@ data/
 
 미래 시각 계산: `day`일 뒤 = `forecast_origin.time` + `day`×24시간.
 
+### long_term (1.1.0, 주봉·월봉 화면용 최대 5년 전망)
+방법: 일간 수익률을 90일 블록째로 복원추출(추세 0, 최근 2년 변동성 수준) → 4,000개 5년 경로.
+| 필드 | 설명 |
+|---|---|
+| `method_ko`, `n_paths`, `sigma_daily_recent` | 방법 설명, 경로 수, 최근 2년 일간 변동성 |
+| `horizons.{91,182,365,1095,1826}` | 3개월/6개월/1년/3년/5년 뒤: `label_ko`, `quantiles`, `prob_up`, `expected_return`, `threshold_factor`, `scenarios[3]`(×f 이상 / 사이 / ÷f 이하), `level_touch[]` |
+| `fan.1w[]`, `fan.1M[]` | 각 미래 주봉·월봉 **시작 시각** `t`(UNIX 초)마다 분위수. 첫 항목은 현재 진행 중인 봉 시작 시각 = 현재가 |
+| `scenario_groups[5]` | 경로 모양(3개월 간격 20개 지점) k-means 5개 묶음, 확률 큰 순. `rank`, `prob`, `label_ko`(예: 박스권 횡보, 큰 하락, 폭등), `checkpoints[20]`(묶음 중심 경로: `day`, `price`), `end_range80` |
+| `top_scenarios[2]` | 상위 2개 묶음 + `representative`(대표 경로: `end_price`, `end_return`, `peak`, `trough`, `max_drawdown`), `candles.{1w,1M}`(가상 캔들 `t,o,h,l,c`), `text_ko` |
+| `calibration.{91,182,365}` | 장기 백테스트 포함률 `raw.cov50/80/95`, `n`, `independent_approx`(겹치지 않는 표본 수 근사). `1095`·`1826`은 `null`(검증 불가), `note_ko` |
+
+`prob`는 "그 경로가 그대로 일어날 확률"이 아니라 **비슷한 모양의 경로들이 차지하는 비율**입니다.
+
 ### calibration
 `calibration.models.{모델}.{7,14,30}`:
 | 필드 | 설명 |
@@ -90,7 +109,7 @@ data/
 열(column) 단위 배열입니다. 같은 인덱스끼리 한 봉입니다.
 | 필드 | 설명 |
 |---|---|
-| `interval` | `1h`/`4h`/`1d` |
+| `interval` | `1h`/`4h`/`1d`/`1w`/`1M` (주봉은 월요일, 월봉은 1일 00:00 UTC 시작) |
 | `t` | 봉 시작 시각(UNIX 초, UTC) |
 | `o,h,l,c,v` | 시가·고가·저가·종가·거래량(기준 통화 수량) |
 | `sma20,sma50,sma200,bb_upper,bb_lower` | 차트 오버레이용 지표(계산 불가 구간은 `null`) |

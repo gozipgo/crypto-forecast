@@ -47,16 +47,18 @@
       <div class="ctl">
         <span class="ctl-label">봉</span>
         <div class="seg" data-ctl="tf">
-          <button data-v="1h">1시간</button><button data-v="4h">4시간</button><button data-v="1d">일</button>
+          <button data-v="1h">1시간</button><button data-v="4h">4시간</button><button data-v="1d">일</button><button data-v="1w">주</button><button data-v="1M">월</button>
         </div>
       </div>
       <div class="ctl">
         <span class="ctl-label">예측</span>
-        <div class="seg" data-ctl="horizon">
-          <button data-v="7">7일</button><button data-v="14">14일</button><button data-v="30">30일</button>
-        </div>
+        <div class="seg" data-ctl="horizon"></div>
       </div>
-      <div class="ctl">
+      <div class="ctl" id="scenRow" hidden>
+        <span class="ctl-label">경로</span>
+        <div class="seg" data-ctl="scen"></div>
+      </div>
+      <div class="ctl" id="modelRow">
         <span class="ctl-label">모델</span>
         <div class="seg" data-ctl="model">
           <button data-v="ensemble">혼합</button><button data-v="montecarlo">몬테카를로</button><button data-v="analog">유사 패턴</button>
@@ -69,7 +71,7 @@
       <div class="legend" id="legend"></div>
       <div class="chart-keys">
         <span><i class="k k95"></i>95%</span><span><i class="k k80"></i>80%</span><span><i class="k k50"></i>50%</span>
-        <span><i class="k kmed"></i>중앙값</span>
+        <span><i class="k kmed"></i>중앙값</span><span id="keyScen" hidden><i class="k kscen"></i>가상 캔들</span>
         <span><i class="k kma20"></i>MA20</span><span><i class="k kma50"></i>MA50</span><span><i class="k kma200"></i>MA200</span>
       </div>
       <p class="hint">두 손가락으로 확대·축소, 좌우로 밀어 이동. 차트를 누르면 그 시점 값이 보여요.</p>
@@ -81,7 +83,14 @@
       <div class="scen" id="scenarios"></div>
     </section>
 
-    <section class="card">
+    <section class="card" id="longCard" hidden>
+      <h2>5년 시나리오 <small>경로 모양별 5개 묶음</small></h2>
+      <div id="longGroups"></div>
+      <div class="long-detail" id="longDetail"></div>
+      <p class="note" id="longNote"></p>
+    </section>
+
+    <section class="card" id="cmpCard">
       <h2>모델 비교 <small id="cmpH"></small></h2>
       <div class="table-wrap"><table class="tbl" id="cmpTable"></table></div>
       <p class="note" id="cmpNote"></p>

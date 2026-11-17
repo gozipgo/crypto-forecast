@@ -7,8 +7,8 @@ import pandas as pd
 
 from . import indicators, narrative, trend
 
-TF_LABEL = {"1h": "1시간봉", "4h": "4시간봉", "1d": "일봉"}
-CHART_BARS = {"1h": 720, "4h": 540, "1d": 1000}
+TF_LABEL = {"1h": "1시간봉", "4h": "4시간봉", "1d": "일봉", "1w": "주봉", "1M": "월봉"}
+CHART_BARS = {"1h": 720, "4h": 540, "1d": 1000, "1w": 600, "1M": 240}
 
 
 def _r(x, nd=2):

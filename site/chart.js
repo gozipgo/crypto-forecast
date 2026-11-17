@@ -52,6 +52,7 @@ export class PriceChart {
     const line = (w) => ({ lineWidth: w, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
     this.ma = { sma20: this.chart.addSeries(LWC.LineSeries, line(1)), sma50: this.chart.addSeries(LWC.LineSeries, line(1)),
       sma200: this.chart.addSeries(LWC.LineSeries, line(2)) };
+    this.scen = this.chart.addSeries(LWC.CandlestickSeries, { priceLineVisible: false, lastValueVisible: false });
     this.fan = new FanPrimitive();
     this.candles.attachPrimitive(this.fan);
     this.priceLines = [];
@@ -71,6 +72,9 @@ export class PriceChart {
       crosshair: { vertLine: { labelBackgroundColor: c.accent }, horzLine: { labelBackgroundColor: c.accent } },
     });
     this.candles.applyOptions({ upColor: c.up, downColor: c.down, borderUpColor: c.up, borderDownColor: c.down, wickUpColor: c.up, wickDownColor: c.down });
+    const su = alpha(c.up, 0.45), sd = alpha(c.down, 0.45);
+    this.scen.applyOptions({ upColor: su, downColor: sd, borderUpColor: alpha(c.up, 0.8), borderDownColor: alpha(c.down, 0.8),
+      wickUpColor: alpha(c.up, 0.6), wickDownColor: alpha(c.down, 0.6) });
     this.ma.sma20.applyOptions({ color: c.ma20 });
     this.ma.sma50.applyOptions({ color: c.ma50 });
     this.ma.sma200.applyOptions({ color: c.ma200 });
@@ -80,7 +84,8 @@ export class PriceChart {
   }
 
   /**
-   * @param {object} o {candles, tf, horizon, pathDaily, originPrice, levels, precision}
+   * @param {object} o {asset, tf, horizon(일), candles, precision, levels,
+   *   단기: pathDaily, originPrice / 장기: longFan[{t,p2_5..}], scenario({t,o,h,l,c}|null)}
    */
   setData(o) {
     const first = !this.data || this.data.key !== `${o.asset}-${o.tf}`;
@@ -90,13 +95,34 @@ export class PriceChart {
     const step = STEP[o.tf];
     const n = k.t.length;
     const lastT = k.t[n - 1];
+    const H = o.horizon * 86400;
+
+    // fan 지점과 미래 빈칸(whitespace) 시각
+    let pts, future;
+    if (o.longFan) {
+      const all = o.longFan.map((p) => ({ time: p.t, ...Object.fromEntries(QK.map((q) => [q, p[q]])) }));
+      pts = all.filter((p) => p.time <= lastT + H + 3 * 86400);
+      pts[0].time = lastT;
+      future = all.filter((p) => p.time > lastT).slice(0, pts.length - 1 + 3).map((p) => p.time);
+    } else {
+      pts = [{ time: lastT, ...Object.fromEntries(QK.map((q) => [q, o.originPrice])) }];
+      for (const row of o.pathDaily) {
+        if (row.day > o.horizon) break;
+        const t = lastT + row.day * 86400;
+        pts.push({ time: t - (t - lastT) % step, ...Object.fromEntries(QK.map((q) => [q, row[q]])) });
+      }
+      const futureBars = Math.ceil((H * 1.1) / step);
+      future = Array.from({ length: futureBars }, (_, j) => lastT + (j + 1) * step);
+    }
+
     const bars = [];
     for (let i = 0; i < n; i++) bars.push({ time: k.t[i], open: k.o[i], high: k.h[i], low: k.l[i], close: k.c[i] });
-    // 미래 구간 빈칸(whitespace): 예측 기간 + 여유 10%
-    const futureBars = Math.ceil((o.horizon * 86400 * 1.1) / step);
-    for (let j = 1; j <= futureBars; j++) bars.push({ time: lastT + j * step });
+    for (const t of future) bars.push({ time: t });
+    // 장기(주봉·월봉)는 로그 가격축: 5년 범위가 수십 배라 선형이면 과거 캔들이 납작해짐
+    this.chart.priceScale('right').applyOptions({ mode: o.longFan ? LWC.PriceScaleMode.Logarithmic : LWC.PriceScaleMode.Normal });
     const prec = o.precision;
-    this.candles.applyOptions({ priceFormat: { type: 'price', precision: prec, minMove: prec ? 0.01 : 1 } });
+    const pf = { type: 'price', precision: prec, minMove: prec ? 0.01 : 1 };
+    this.candles.applyOptions({ priceFormat: pf });
     this.candles.setData(bars);
     for (const key of ['sma20', 'sma50', 'sma200']) {
       const arr = [];
@@ -105,22 +131,30 @@ export class PriceChart {
     }
     this._setVolume();
 
-    // fan: 출발점(마지막 봉) + d일 뒤 분위수
-    const pts = [{ time: lastT, ...Object.fromEntries(QK.map((q) => [q, o.originPrice])) }];
-    for (const row of o.pathDaily) {
-      if (row.day > o.horizon) break;
-      const t = lastT + row.day * 86400;
-      pts.push({ time: t - (t - lastT) % step, ...Object.fromEntries(QK.map((q) => [q, row[q]])) });
+    // 가상 캔들(선택한 시나리오의 대표 경로)
+    const sc = o.scenario;
+    const lastFuture = future.length ? future[future.length - 1] : lastT;
+    const sbars = [];
+    if (sc) {
+      for (let i = 0; i < sc.t.length; i++) {
+        if (sc.t[i] <= lastT || sc.t[i] > lastFuture) continue;
+        sbars.push({ time: sc.t[i], open: sc.o[i], high: sc.h[i], low: sc.l[i], close: sc.c[i] });
+      }
     }
+    this.scen.applyOptions({ priceFormat: pf, title: o.scenarioTitle || '' , lastValueVisible: !!sbars.length });
+    this.scen.setData(sbars);
+
     this.fanPoints = pts;
     this.fan.setData(pts, this.colors.fan.replace(/\s/g, ''), this.colors.accent);
     this._drawLevels();
 
-    // 처음 보거나 봉/자산이 바뀌면 보기 범위 재설정: 과거 일부 + 예측 전체
+    // 처음 보거나 봉/자산/기간이 바뀌면 보기 범위 재설정: 과거 일부 + 예측 전체
     if (first || prevHorizon !== o.horizon) {
-      const fut = Math.ceil((o.horizon * 86400) / step);
-      const hist = Math.min(n - 1, Math.max(Math.round(fut * 1.4), 60));
-      this.chart.timeScale().setVisibleLogicalRange({ from: n - 1 - hist, to: n - 1 + fut + 3 });
+      const fut = o.longFan ? pts.length - 1 : Math.ceil(H / step);
+      let hist = Math.min(n - 1, Math.max(Math.round(fut * 1.4), 60));
+      if (o.tf === '1M') hist = n - 1;
+      if (o.tf === '1w') hist = Math.min(n - 1, Math.max(fut, 104));
+      this.chart.timeScale().setVisibleLogicalRange({ from: n - 1 - hist, to: n - 1 + fut + 2 });
     }
     this.data.lastHorizon = o.horizon;
     this._showLegendDefault();
@@ -166,8 +200,13 @@ export class PriceChart {
       const v = (k) => a[k] + (b[k] - a[k]) * w;
       const days = (t - pts[0].time) / 86400;
       const d = new Date(t * 1000);
+      const ago = days < 1 ? `${Math.round(days * 24)}시간` : days < 60 ? `${days.toFixed(days < 3 ? 1 : 0)}일`
+        : days < 730 ? `${Math.round(days / 30.44)}개월` : `${(days / 365.25).toFixed(1)}년`;
+      const when = days < 60 ? `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}시` : `${d.getFullYear()}.${d.getMonth() + 1}`;
+      const sb = p.seriesData.get(this.scen);
+      const scLine = sb && sb.close !== undefined ? `<br>가상 캔들 종가 <b>${this._fmt(sb.close)}</b>` : '';
       this.legend.innerHTML =
-        `<b>${days < 1 ? `${Math.round(days * 24)}시간` : `${days.toFixed(days < 3 ? 1 : 0)}일`} 뒤</b> · ${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}시<br>` +
+        `<b>${ago} 뒤</b> · ${when}${scLine}<br>` +
         `중앙값 <b>${this._fmt(v('p50'))}</b><br>50% ${this._fmt(v('p25'))} ~ ${this._fmt(v('p75'))}<br>` +
         `80% ${this._fmt(v('p10'))} ~ ${this._fmt(v('p90'))}<br>95% ${this._fmt(v('p2_5'))} ~ ${this._fmt(v('p97_5'))}`;
       return;

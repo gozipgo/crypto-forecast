@@ -29,6 +29,10 @@ def summarize(df: pd.DataFrame, ind: pd.DataFrame, tf_label: str) -> dict:
         arr, sig = "정배열(20>50>200)", "bullish"
     elif len(avail) == 3 and mas[20] < mas[50] < mas[200]:
         arr, sig = "역배열(20<50<200)", "bearish"
+    elif len(avail) == 2 and mas[20] > mas[50]:
+        arr, sig = "단기 정배열(20>50, 200은 데이터 부족)", "bullish"
+    elif len(avail) == 2 and mas[20] < mas[50]:
+        arr, sig = "단기 역배열(20<50, 200은 데이터 부족)", "bearish"
     else:
         arr, sig = "혼조 배열", "neutral"
     cross = ""

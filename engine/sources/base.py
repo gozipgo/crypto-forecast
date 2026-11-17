@@ -57,6 +57,22 @@ def resample(df: pd.DataFrame, rule: str) -> pd.DataFrame:
     return out.dropna()
 
 
+def resample_calendar(daily: pd.DataFrame, iv: str) -> pd.DataFrame:
+    """일봉 → 주봉(월요일 시작, Binance와 동일) 또는 월봉(매월 1일 시작)."""
+    agg = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+    return daily.groupby(bar_start(daily.index, iv)).agg(agg).dropna()
+
+
+def bar_start(idx: pd.DatetimeIndex, iv: str) -> pd.DatetimeIndex:
+    """각 시각이 속한 주봉(월요일 00:00 UTC) 또는 월봉(1일 00:00 UTC) 시작 시각."""
+    d = idx.floor("1D")
+    if iv == "1w":
+        return d - pd.to_timedelta(d.day_of_week, unit="D")
+    if iv == "1M":
+        return d - pd.to_timedelta(d.day - 1, unit="D")
+    raise ValueError(iv)
+
+
 # 우선순위 순서. 각 항목: (이름, fetch 함수)
 SOURCES: list[tuple[str, Callable[..., pd.DataFrame]]] = []
 

@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from .sources import fetch_candles
+from .sources.base import resample_calendar
 
 log = logging.getLogger(__name__)
 
@@ -29,4 +30,8 @@ def load_asset(asset: str, use_cache_minutes: float = 0) -> dict:
                 CACHE.mkdir(exist_ok=True)
                 pd.to_pickle((df, src), f)
         out[iv], out["sources"][iv] = df, src
+    # 주봉(월요일 00:00 UTC 시작)·월봉(1일 시작)은 일봉 전체 이력에서 만든다 → 추가 요청 없음
+    for iv in ("1w", "1M"):
+        out[iv] = resample_calendar(out["1d"], iv)
+        out["sources"][iv] = out["sources"]["1d"]
     return out
