@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gozipgo.github.io/crypto-forecast/schema/forecast.v1.schema.json",
   "title": "crypto-forecast 결과 JSON v1",
-  "description": "forecast.json / summary.json / manifest.json / candles_*.json 정의. 하위호환 추가는 minor, 삭제·의미 변경은 major. v1.1.0: 주봉·월봉, long_term(최대 5년) 추가. v1.2.0: long_term.variants(추세 가정 3가지), default_variant, typical_max_drawdown, 장기 백테스트 above_median.",
+  "description": "forecast.json / summary.json / manifest.json / candles_*.json 정의. 하위호환 추가는 minor, 삭제·의미 변경은 major. v1.1.0: 주봉·월봉, long_term(최대 5년) 추가. v1.2.0: long_term.variants(추세 가정 3가지), default_variant, typical_max_drawdown, 장기 백테스트 above_median. v1.3.0: ta_scenarios(봉별 차트 기술적 분석 시나리오 2개 + 가상 캔들).",
   "$defs": {
     "prob": {
       "type": "number",
@@ -494,6 +494,21 @@
         },
         "long_term": {
           "$ref": "#/$defs/longTerm"
+        },
+        "ta_scenarios": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "1h",
+              "4h",
+              "1d",
+              "1w",
+              "1M"
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/taTimeframe"
+          }
         }
       }
     },
@@ -978,6 +993,291 @@
             "365",
             "note_ko"
           ]
+        }
+      }
+    },
+    "taCandles": {
+      "type": "object",
+      "required": [
+        "t",
+        "o",
+        "h",
+        "l",
+        "c"
+      ],
+      "properties": {
+        "t": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "o": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "h": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "l": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "c": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "taScenario": {
+      "type": "object",
+      "required": [
+        "role",
+        "kind",
+        "direction",
+        "label_ko",
+        "text_ko",
+        "first_target",
+        "steps",
+        "candles",
+        "evidence_share"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "primary",
+            "alternate"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "trend",
+            "reversal",
+            "range",
+            "breakout"
+          ]
+        },
+        "direction": {
+          "enum": [
+            "up",
+            "down",
+            "range"
+          ]
+        },
+        "label_ko": {
+          "type": "string"
+        },
+        "text_ko": {
+          "type": "string"
+        },
+        "evidence_share": {
+          "$ref": "#/$defs/prob"
+        },
+        "first_target": {
+          "type": "object",
+          "required": [
+            "price",
+            "change",
+            "note_ko"
+          ]
+        },
+        "furthest": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "invalidation": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "box": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number"
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "t",
+              "bars",
+              "price",
+              "kind",
+              "note_ko"
+            ],
+            "properties": {
+              "t": {
+                "type": "integer"
+              },
+              "bars": {
+                "type": "integer"
+              },
+              "price": {
+                "type": "number"
+              },
+              "kind": {
+                "enum": [
+                  "pullback",
+                  "impulse",
+                  "correction",
+                  "target",
+                  "retest",
+                  "range"
+                ]
+              },
+              "note_ko": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "candles": {
+          "$ref": "#/$defs/taCandles"
+        },
+        "stat_check": {
+          "type": "object",
+          "required": [
+            "days",
+            "target_touch"
+          ],
+          "properties": {
+            "days": {
+              "type": "integer"
+            },
+            "target_touch": {
+              "$ref": "#/$defs/prob"
+            },
+            "invalidation_touch": {
+              "$ref": "#/$defs/prob"
+            },
+            "target_first": {
+              "$ref": "#/$defs/prob"
+            },
+            "box_kept": {
+              "$ref": "#/$defs/prob"
+            }
+          }
+        }
+      }
+    },
+    "taTimeframe": {
+      "type": "object",
+      "required": [
+        "method_ko",
+        "interval",
+        "structure",
+        "evidence",
+        "swing",
+        "scenarios",
+        "backtest"
+      ],
+      "properties": {
+        "method_ko": {
+          "type": "string"
+        },
+        "interval": {
+          "enum": [
+            "1h",
+            "4h",
+            "1d",
+            "1w",
+            "1M"
+          ]
+        },
+        "stat_model_ko": {
+          "type": "string"
+        },
+        "structure": {
+          "type": "object",
+          "required": [
+            "code",
+            "label_ko",
+            "pivots"
+          ]
+        },
+        "evidence": {
+          "type": "object",
+          "required": [
+            "items",
+            "bull",
+            "bear",
+            "neutral",
+            "score"
+          ],
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "name_ko",
+                  "signal",
+                  "text_ko"
+                ],
+                "properties": {
+                  "signal": {
+                    "enum": [
+                      -1,
+                      0,
+                      1
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "swing": {
+          "type": "object"
+        },
+        "scenarios": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/taScenario"
+          }
+        },
+        "backtest": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "n": {
+              "type": "integer"
+            },
+            "target_first_resolved": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "baseline_resolved": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          }
         }
       }
     }

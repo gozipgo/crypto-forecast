@@ -12,7 +12,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import backtest
+from . import backtest, ta_scenarios
 from .schema import validate
 from . import levels as levels_mod
 from .data import load_asset
@@ -20,7 +20,7 @@ from .models import analog, ensemble, longterm, montecarlo
 from .models.common import HORIZONS, recalibrate, summarize
 from .technicals import analyze_tf, candles_payload
 
-SCHEMA_VERSION = "1.2.0"
+SCHEMA_VERSION = "1.3.0"
 TIMEFRAMES = ("1h", "4h", "1d", "1w", "1M")
 ASSETS = ["BTC", "ETH"]
 DISCLAIMER = "투자 조언이 아니며, 확률은 과거 데이터에 기반한 통계적 추정입니다."
@@ -86,6 +86,24 @@ def build_asset(asset: str, out: Path, cache_min: float, generated_at: str) -> d
     long_term["calibration"] = lbt[long_term["default_variant"]]
     log.info("%s 장기 전망 %.1fs", asset, time.time() - t2)
 
+    # 차트 기술적 분석 시나리오(봉마다 2개) + 통계 모델로 교차 확인 + 백테스트
+    t3 = time.time()
+    p_chk = recalibrate(p_en, {h: cal["ensemble"][str(h)]["recal"] for h in HORIZONS})
+    long_sim = longterm.sim_paths(daily, longterm.DAYS)
+    ta = {}
+    for tf in TIMEFRAMES:
+        r = ta_scenarios.analyze(data[tf], inds[tf], tf)
+        if r is None:
+            continue
+        days = {"1w": 365, "1M": longterm.DAYS}.get(tf, 30)
+        src = (long_sim["cum"], long_sim["hi"], long_sim["lo"]) if tf in ("1w", "1M") else (p_chk.close, p_chk.high, p_chk.low)
+        for sc in r["scenarios"]:
+            sc["stat_check"] = ta_scenarios.stat_check(*src, price, sc, days)
+        r["stat_model_ko"] = "장기 모델(줄인 추세)" if tf in ("1w", "1M") else "혼합 모델(보정 적용)"
+        r["backtest"] = ta_scenarios.backtest(data[tf], inds[tf], tf)
+        ta[tf] = r
+    log.info("%s 기술적 시나리오 %.1fs", asset, time.time() - t3)
+
     # 24시간 변동: 1시간봉 기준 24봉 전 종가 대비
     chg24 = price / float(h1["close"].iloc[-25]) - 1 if len(h1) > 25 else None
     doc = {
@@ -105,6 +123,7 @@ def build_asset(asset: str, out: Path, cache_min: float, generated_at: str) -> d
                             "daily_history_from": iso(daily.index[0]), "daily_history_to": iso(daily.index[-1])},
         "forecasts": forecasts,
         "long_term": long_term,
+        "ta_scenarios": ta,
         "calibration": {"method": "walk_forward", "step_days": 3, "period": [first[0], first[1]],
                         "target": {"cov50": 0.5, "cov80": 0.8, "cov95": 0.95}, "models": cal},
         "disclaimer_ko": DISCLAIMER,

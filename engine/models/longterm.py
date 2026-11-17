@@ -301,3 +301,10 @@ def backtest(daily: pd.DataFrame, start: str = "2019-01-01", step: int = 14, n_p
         out[kind]["note_ko"] = ("3개월~1년은 2019년부터 2주 간격으로 검증(구간이 서로 겹쳐 실제 독립 표본은 적음). "
                                 "3년·5년은 비교할 과거가 2~3번뿐이라 검증할 수 없어, 참고용 통계 추정입니다.")
     return out
+
+
+def sim_paths(daily: pd.DataFrame, days: int, n_paths: int = 2000, seed: int = 23, kind: str = "shrunk") -> dict:
+    """기술적 시나리오 교차 확인용: 기본 추세 가정의 가상 경로(cum/hi/lo, 현재가 대비 로그)."""
+    sim = simulate(returns_pool(daily), n_paths, days, seed)
+    shift = (drift(daily, kind) * np.arange(1, days + 1, dtype=np.float32))[None, :]
+    return {k: v + shift for k, v in sim.items()}

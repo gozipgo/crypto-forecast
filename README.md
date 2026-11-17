@@ -81,6 +81,26 @@ py -3.12 -m venv .venv            # 또는: python -m venv .venv
 - 3개월~1년은 백테스트 포함률을 보여 주고, 3년·5년은 비교할 과거가 부족해 검증하지 않습니다.
 - 주봉·월봉 화면은 가격축이 로그 눈금입니다.
 
+### 차트로 본 시나리오 2개 (모든 봉)
+통계 음영과 별도로, **차트 기술적 분석 규칙만으로** 앞으로의 경로를 주 시나리오·대안 시나리오 2개로 그리고 가상 캔들로 보여 줍니다
+(1시간·4시간·일봉: 30일, 주봉: 1년, 월봉: 5년). 엔진: `engine/ta_scenarios.py`.
+1. **스윙 찾기**: ATR의 2~3배 이상 움직인 고점·저점만 남기는 지그재그. 고점·저점이 높아지는지 낮아지는지로 다우 이론 구조 판정.
+2. **근거 점수**: 이동평균 배열, 가격 vs 50선, 50선 기울기, 고점·저점 구조, MACD, RSI, 볼린저 중심선, 거래량 쏠림 → 상승/하락/중립.
+   한쪽이 뚜렷하면 주 시나리오 = 추세 지속, 대안 = 추세 전환. 애매하면 주 = 박스권, 대안 = 박스 돌파.
+3. **경로 그리기**: 되돌림 중이면 피보나치 38.2~61.8% 안의 지지(겹치는 가격 우선)까지 눌림 → 지지·저항, 측정 이동(직전 파동 폭), 피보나치 1.618 확장으로 만든
+   목표가(최대 3개)를 차례로 → 목표 뒤에는 돌파한 가격대 재시험(역할 전환) 또는 피보나치 되돌림(50/38.2/61.8% 교대) → 목표를 다 쓰면 횡보.
+   파동 하나의 폭과 걸리는 봉 수는 그 봉의 최근 스윙 평균을 따르고, 캔들마다 최근 변동성만큼 흔들림을 넣습니다.
+4. **무효화 가격**: 직전 스윙 저점(상승)·고점(하락) — 다우 이론에서 추세가 깨지는 곳. 너무 멀면 가까운 반대편 가격대.
+5. **정직하게 보여 주기**: 근거 수는 확률이 아니므로, 통계 모델로 "1차 목표가 무효화보다 먼저 닿을 확률"을 함께 표시하고,
+   과거 백테스트(주 시나리오 1차 목표가 먼저 닿은 비율 vs 무작위 기준)를 보여 줍니다. 2026-11 기준 BTC 일봉 73% vs 무작위 69%, 주봉 69% vs 64%,
+   4시간봉은 무작위와 비슷 — 기술적 시나리오의 우위는 크지 않습니다.
+
+참고 자료: [StockCharts ChartSchool – 지지와 저항](https://chartschool.stockcharts.com/table-of-contents/chart-analysis/support-and-resistance),
+[측정 이동](https://chartschool.stockcharts.com/table-of-contents/chart-analysis/chart-patterns/measured-move-bullish),
+[피보나치 되돌림](https://chartschool.stockcharts.com/table-of-contents/chart-analysis/fibonacci-retracements),
+[Fidelity – 지지·저항 역할 전환](https://www.fidelity.com/learning-center/trading-investing/technical-analysis/support-and-resistance),
+[다우 이론 추세](https://www.incrediblecharts.com/technical/dow_theory_trends.php), Murphy의 [기술적 분석 10원칙](https://stockcharts.com/ten-laws/murphys-ten-laws.pdf).
+
 ## 신뢰성 검증(백테스트)
 2019-01부터 3일 간격 워크포워드(그 시점까지의 데이터만 사용, 테스트로 미래 정보 누수 없음을 확인).
 50/80/95% 구간에 실제 가격이 들어간 비율을 화면에 표시합니다.
@@ -96,10 +116,10 @@ py -3.12 -m venv .venv            # 또는: python -m venv .venv
 
 ## 화면
 - BTC/ETH 탭, 봉(1시간/4시간/일/주/월), 예측 기간(1시간~일봉: 7/14/30일, 주봉: 3개월/6개월/1년, 월봉: 1년/3년/5년), 모델(단기) 또는 시나리오(장기) 전환. 선택은 기기에 기억됩니다.
-- 주소로 보기 지정: `?asset=ETH&tf=1M&h=1826&scen=1` (scen: 0=1번, 1=2번, -1=음영만)
+- 주소로 보기 지정: `?asset=ETH&tf=1M&h=1826&scen=ta0` (scen: ta0=차트 주 시나리오, ta1=대안, st0/st1=통계 묶음 1·2번(주봉·월봉), off=음영만)
 - 차트: 캔들·MA20/50/200·거래량·지지/저항선 + 오른쪽 미래 구간에 **확률 전개(95/80/50% 음영, 점선=중앙값)**. 두 손가락 확대, 좌우 이동, 누르면 그 시점의 값(미래 구간이면 분위수) 표시.
 - 색은 한국식: **상승 빨강, 하락 파랑**.
-- 카드: 시나리오 확률, 모델 비교, 지지/저항 도달 확률, 지표 요약(선택한 봉 기준), 가장 비슷했던 과거 5개, 신뢰성(백테스트 포함률).
+- 카드: 차트로 본 시나리오 2개(경유점·목표·무효화·근거·백테스트), 시나리오 확률, 모델 비교, 지지/저항 도달 확률, 지표 요약(선택한 봉 기준), 가장 비슷했던 과거 5개, 신뢰성(백테스트 포함률).
 - PWA: 사파리 공유 → **홈 화면에 추가** 하면 주소창 없이 앱처럼 열립니다. 아이콘은 `scripts/make_icons.py`로 생성.
 - 차트 라이브러리: TradingView Lightweight Charts v5.2.1 (Apache-2.0, `site/vendor/`에 라이선스 포함).
 
@@ -116,6 +136,7 @@ engine/            계산 (Python)
   sources/         데이터 소스 + 폴백 체인
   indicators.py    MA·RSI·MACD·볼린저·ATR·ADX·거래량
   levels.py        지지/저항   trend.py 추세   narrative.py 한국어 요약
+  ta_scenarios.py  차트 기술적 분석 시나리오 2개 + 가상 캔들
   models/          montecarlo.py · analog.py · ensemble.py · common.py
   backtest.py      워크포워드 보정도 + 재보정
   schema.py        JSON 스키마 검증     run.py 진입점

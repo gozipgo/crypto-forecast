@@ -3,7 +3,10 @@ import { PriceChart } from './chart.js';
 
 const SUPPORTED_MAJOR = 1;
 const $ = (id) => document.getElementById(id);
-const state = { asset: 'BTC', tf: '4h', horizon: 14, model: 'ensemble', hLong: { '1w': 365, '1M': 1826 }, scen: 0, variant: 'shrunk' };
+const state = { asset: 'BTC', tf: '4h', horizon: 14, model: 'ensemble', hLong: { '1w': 365, '1M': 1826 }, scen: 'ta0', variant: 'shrunk' };
+// 경로 선택: ta0/ta1 = 차트 기술적 시나리오(주/대안), st0/st1 = 통계 묶음 1·2번(주봉·월봉), off = 음영만
+const SCENS = ['ta0', 'ta1', 'st0', 'st1', 'off'];
+const OLD_SCEN = { 0: 'st0', 1: 'st1', '-1': 'off' };
 const cache = new Map();
 let manifest = null;
 let chart = null;
@@ -11,7 +14,7 @@ let chart = null;
 try { Object.assign(state, JSON.parse(localStorage.getItem('view') || '{}')); } catch (e) { /* 저장소 사용 불가 */ }
 state.horizon = Number(state.horizon) || 14;
 state.hLong = { '1w': 365, '1M': 1826, ...(state.hLong || {}) };
-if (![0, 1, -1].includes(state.scen)) state.scen = 0;
+if (!SCENS.includes(state.scen)) state.scen = 'ta0';
 if (!['shrunk', 'zero', 'historical'].includes(state.variant)) state.variant = 'shrunk';
 // 주소로 보기 지정(공유·테스트용): ?asset=ETH&tf=1M&h=1826&scen=1
 {
@@ -19,7 +22,8 @@ if (!['shrunk', 'zero', 'historical'].includes(state.variant)) state.variant = '
   if (['BTC', 'ETH'].includes(q.get('asset'))) state.asset = q.get('asset');
   if (['1h', '4h', '1d', '1w', '1M'].includes(q.get('tf'))) state.tf = q.get('tf');
   if (q.get('h')) { const h = Number(q.get('h')); if (state.tf === '1w' || state.tf === '1M') state.hLong[state.tf] = h; else state.horizon = h; }
-  if (q.get('scen') !== null && [0, 1, -1].includes(Number(q.get('scen')))) state.scen = Number(q.get('scen'));
+  const qs = q.get('scen');
+  if (qs !== null) state.scen = SCENS.includes(qs) ? qs : (OLD_SCEN[qs] || state.scen);
   if (['ensemble', 'montecarlo', 'analog'].includes(q.get('model'))) state.model = q.get('model');
   if (['shrunk', 'zero', 'historical'].includes(q.get('trend'))) state.variant = q.get('trend');
 }
@@ -31,6 +35,7 @@ const HZ = {
   '1w': [[91, '3개월'], [182, '6개월'], [365, '1년']],
   '1M': [[365, '1년'], [1095, '3년'], [1826, '5년']],
 };
+const dirArrow = (d) => (d === 'up' ? '↗' : d === 'down' ? '↘' : '↔');
 const isLong = () => state.tf === '1w' || state.tf === '1M';
 const curH = () => (isLong() ? state.hLong[state.tf] : state.horizon);
 // 장기 결과: 선택한 추세 가정의 값으로 덮어쓴 보기
@@ -77,7 +82,6 @@ function buildSegs(fc) {
     hs.dataset.key = key;
   }
   $('modelRow').hidden = isLong();
-  $('scenRow').hidden = !isLong();
   $('variantRow').hidden = !isLong() || !fc?.long_term?.variants;
   if (isLong() && fc) {
     const vs = fc.long_term.variants;
@@ -87,10 +91,13 @@ function buildSegs(fc) {
         return `<button data-v="${k}">${VARIANT_SHORT[k]} ${k === 'zero' ? '' : `${d >= 0 ? '+' : ''}${Math.round(d * 100)}%/년`}</button>`;
       }).join('');
     }
-    const top = longView(fc).top_scenarios;
-    document.querySelector('[data-ctl="scen"]').innerHTML =
-      top.map((g, i) => `<button data-v="${i}" title="${esc(g.label_ko)}">${i + 1}번 · ${pct0(g.prob)}</button>`).join('') +
-      '<button data-v="-1">음영만</button>';
+  }
+  if (fc) {
+    const ta = fc.ta_scenarios?.[state.tf];
+    const taBtns = ta ? ta.scenarios.map((sc, i) => `<button data-v="ta${i}" title="${esc(sc.label_ko)}">${i ? '대안' : '주'} ${dirArrow(sc.direction)}</button>`).join('') : '';
+    const stBtns = isLong() ? longView(fc).top_scenarios.map((g, i) => `<button data-v="st${i}" title="통계 묶음: ${esc(g.label_ko)}">통계${i + 1}</button>`).join('') : '';
+    document.querySelector('[data-ctl="scen"]').innerHTML = taBtns + stBtns + '<button data-v="off">끔</button>';
+    $('scenRow').hidden = false;
   }
 }
 
@@ -123,7 +130,7 @@ async function render() {
   if (isLong()) return renderLong(fc, candles);
   for (const id of ['cmpCard', 'analogCard']) $(id).hidden = false;
   $('longCard').hidden = true;
-  $('keyScen').hidden = true;
+  if (state.scen.startsWith('st')) state.scen = 'ta0';
   const model = fc.forecasts[state.model];
   const H = String(state.horizon);
   const hz = model.horizons[H];
@@ -131,8 +138,9 @@ async function render() {
   // 차트
   chart.setData({
     asset: state.asset, tf: state.tf, horizon: state.horizon, candles, pathDaily: model.path_daily,
-    originPrice: fc.forecast_origin.price, levels: fc.levels, precision: precision(state.asset),
+    originPrice: fc.forecast_origin.price, levels: fc.levels, precision: precision(state.asset), ...pickScenario(fc),
   });
+  renderTA(fc);
 
   // 시나리오
   renderScenarioBars(hz, fc, `${state.horizon}일 뒤 시나리오`, `${MODEL_KO[state.model]}${model.calibrated ? ' · 보정 적용' : ''}`);
@@ -168,6 +176,73 @@ async function render() {
 
   renderCalibration(fc);
   renderMeta(fc);
+}
+
+// 차트에 그릴 가상 캔들(선택한 시나리오) + 다른 기술적 시나리오 점선 + 목표/무효화 선
+function pickScenario(fc) {
+  const ta = fc.ta_scenarios?.[state.tf];
+  const s = state.scen;
+  let out = { scenario: null, scenarioAlt: null, scenarioTitle: '', scenarioMarks: [] };
+  if (s.startsWith('ta') && ta) {
+    const i = Number(s[2]);
+    const sc = ta.scenarios[i];
+    const marks = [];
+    if (sc.box) marks.push({ price: sc.box[0], title: '박스 하단', kind: 'tgt' }, { price: sc.box[1], title: '박스 상단', kind: 'tgt' });
+    else marks.push({ price: sc.first_target.price, title: '1차 목표', kind: 'tgt' });
+    if (sc.invalidation) marks.push({ price: sc.invalidation.price, title: '무효화', kind: 'inv' });
+    out = { scenario: sc.candles, scenarioAlt: ta.scenarios[1 - i].candles, scenarioTitle: i ? '대안' : '주 시나리오', scenarioMarks: marks };
+  } else if (s.startsWith('st') && isLong()) {
+    const g = longView(fc).top_scenarios[Number(s[2])];
+    if (g) out = { ...out, scenario: g.candles[state.tf], scenarioTitle: `통계 ${Number(s[2]) + 1}` };
+  }
+  $('keyScen').hidden = !out.scenario;
+  $('keyAlt').hidden = !out.scenarioAlt;
+  return out;
+}
+
+const TF_DAYS = { '1h': '30일', '4h': '30일', '1d': '30일', '1w': '1년', '1M': '5년' };
+function renderTA(fc) {
+  const ta = fc.ta_scenarios?.[state.tf];
+  $('taCard').hidden = !ta;
+  if (!ta) return;
+  const ev = ta.evidence;
+  $('taSub').textContent = `${TF_KO[state.tf]} · 앞으로 ${TF_DAYS[state.tf]}`;
+  const last = ta.structure.pivots.slice(-4).map((p) => `${p.type === 'high' ? '고' : '저'} ${fmtCompact(p.price)}`).join(' → ');
+  $('taStruct').innerHTML = `<b>${esc(ta.structure.label_ko)}</b><br>최근 스윙: ${esc(last)}`;
+  const sel = state.scen.startsWith('ta') ? Number(state.scen[2]) : -1;
+  $('taScens').innerHTML = ta.scenarios.map((sc, i) => {
+    const sideN = sc.direction === 'up' ? ev.bull : sc.direction === 'down' ? ev.bear : ev.neutral;
+    const steps = sc.steps.slice(0, 5).map((st) => `<li><span class="px">${fmtUSD(st.price)}</span> ${esc(st.note_ko)}</li>`).join('');
+    const c = sc.stat_check || {};
+    const days = c.days >= 365 ? `${Math.round(c.days / 365)}년` : `${c.days}일`;
+    const chk = sc.box
+      ? `통계 모델로 보면 ${days} 내내 박스 안에 머물 확률 ${pct0(c.box_kept ?? 0)}`
+      : `통계 모델로 보면 ${days} 안에 1차 목표 도달 ${pct0(c.target_touch)}` +
+        (c.target_first != null ? `, 무효화 가격보다 먼저 닿을 확률 ${pct0(c.target_first)}` : '');
+    const kv = sc.box
+      ? `<dt>박스</dt><dd>${fmtUSD(sc.box[0])} ~ ${fmtUSD(sc.box[1])}</dd>`
+      : `<dt>1차 목표</dt><dd class="${cls(sc.first_target.change)}">${fmtUSD(sc.first_target.price)} (${fmtPct(sc.first_target.change)})</dd>` +
+        (sc.furthest ? `<dt>기간 중 최대</dt><dd class="${cls(sc.furthest.change)}">${fmtUSD(sc.furthest.price)} (${fmtPct(sc.furthest.change)})</dd>` : '') +
+        (sc.invalidation ? `<dt>무효화</dt><dd>${fmtUSD(sc.invalidation.price)} (${fmtPct(sc.invalidation.change)}) <small class="note">${esc(sc.invalidation.note_ko)}</small></dd>` : '');
+    return `<div class="ta-sc ${sel === i ? 'sel' : ''}" data-scen="ta${i}">` +
+      `<div class="hd"><b class="${sc.direction === 'up' ? 'up' : sc.direction === 'down' ? 'down' : ''}">${dirArrow(sc.direction)} ${esc(sc.label_ko)}</b>` +
+      `<span class="tag ${i ? '' : 'main'}">${i ? '대안' : '주 시나리오'} · 근거 ${sideN}/${ev.items.length}</span></div>` +
+      `<ol>${steps}</ol><dl class="kv">${kv}</dl><div class="chk">${esc(chk)} (${esc(ta.stat_model_ko || '')})</div></div>`;
+  }).join('');
+  $('taEvSum').textContent = `상승 ${ev.bull} · 하락 ${ev.bear} · 중립 ${ev.neutral}`;
+  const SIG = { 1: 'bullish', '-1': 'bearish', 0: 'neutral' };
+  $('taEvidence').innerHTML = ev.items.map((it) =>
+    `<li><span class="name"><i class="dot ${SIG[it.signal]}"></i>${esc(it.name_ko)}</span><span>${esc(it.text_ko)}</span></li>`).join('');
+  const bt = ta.backtest;
+  $('taBt').innerHTML = bt
+    ? `<b>과거에 이 방법이 맞았나?</b> ${bt.period[0]}~${bt.period[1]} ${bt.n}회(${bt.horizon_bars}봉 안): ` +
+      `주 시나리오의 1차 목표가 무효화 가격보다 먼저 닿은 비율 <b>${pct0(bt.target_first_resolved)}</b>, ` +
+      `방향 없이 무작위로 움직였다면 기대값 ${pct0(bt.baseline_resolved)}. ` +
+      (Math.abs(bt.target_first_resolved - bt.baseline_resolved) < 0.03 ? '→ 무작위와 거의 차이 없음.'
+        : bt.target_first_resolved > bt.baseline_resolved ? `→ 무작위보다 ${Math.round((bt.target_first_resolved - bt.baseline_resolved) * 100)}%p 나음.` : '→ 무작위보다 못함.')
+    : '';
+  $('taNote').textContent = `방법: ${ta.method_ko}. 파동 하나의 폭·기간은 이 봉의 최근 스윙 평균(오름 ${fmtPct(ta.swing.median_leg_up_pct, 0)}, 내림 -${Math.round(ta.swing.median_leg_down_pct * 100)}%, 약 ${ta.swing.median_leg_bars}봉)을 따릅니다. ` +
+    '가상 캔들은 시나리오를 그림으로 보여 주는 한 예시일 뿐 정확한 시점·가격 예측이 아닙니다. 근거 수는 확률이 아니며, 확률은 아래 통계 모델 수치를 참고하세요.';
 }
 
 function renderHeader(fc) {
@@ -220,14 +295,14 @@ function renderLong(fc, candles) {
   for (const id of ['cmpCard', 'analogCard']) $(id).hidden = true;
   $('longCard').hidden = false;
   const top = lt.top_scenarios;
-  const sel = state.scen >= 0 ? top[state.scen] : null;
-  $('keyScen').hidden = !sel;
+  const si = state.scen.startsWith('st') ? Number(state.scen[2]) : -1;
+  const sel = si >= 0 ? top[si] : null;
 
   chart.setData({
     asset: state.asset, tf: state.tf, horizon: H, candles, precision: precision(state.asset), levels: fc.levels,
-    longFan: lt.fan[state.tf], scenario: sel ? sel.candles[state.tf] : null,
-    scenarioTitle: sel ? `시나리오 ${state.scen + 1}` : '',
+    longFan: lt.fan[state.tf], ...pickScenario(fc),
   });
+  renderTA(fc);
 
   renderScenarioBars(hz, fc, `${hz.label_ko} 뒤 분포`, `장기 · ${lt.label_ko || ''}`);
   $('longSub').textContent = `경로 모양별 5개 묶음 · ${lt.label_ko || ''}`;
@@ -236,14 +311,14 @@ function renderLong(fc, candles) {
   $('longGroups').innerHTML = lt.scenario_groups.map((g, i) => {
     const pick = i < 2;
     const end = g.checkpoints[g.checkpoints.length - 1].price;
-    return `<div class="grp ${pick ? 'pick' : ''} ${pick && state.scen === i ? 'sel' : ''}" ${pick ? `data-scen="${i}"` : ''}>` +
+    return `<div class="grp ${pick ? 'pick' : ''} ${pick && si === i ? 'sel' : ''}" ${pick ? `data-scen="st${i}"` : ''}>` +
       `<span class="rk">${g.rank}</span><span class="nm">${esc(g.label_ko)}<small>5년 뒤 중심 ${fmtCompact(end)} (${fmtPct(end / fc.price - 1, 0)})</small></span>` +
       `<span class="bar"><i style="width:${g.prob * 100 / lt.scenario_groups[0].prob}%;background:var(--accent)"></i></span>` +
       `<span class="pct">${pct0(g.prob)}</span></div>`;
   }).join('');
   if (sel) {
     const r = sel.representative;
-    $('longDetail').innerHTML = `<b>시나리오 ${state.scen + 1}: ${esc(sel.label_ko)}</b> (${pct0(sel.prob)})<br>${esc(sel.text_ko)}` +
+    $('longDetail').innerHTML = `<b>통계 시나리오 ${si + 1}: ${esc(sel.label_ko)}</b> (${pct0(sel.prob)})<br>${esc(sel.text_ko)}` +
       `<dl><dt>5년 뒤 (대표 경로)</dt><dd class="${cls(r.end_return)}">${fmtUSD(r.end_price)} (${fmtPct(r.end_return, 0)})</dd>` +
       `<dt>최고점</dt><dd>${fmtUSD(r.peak.price)} · ${r.peak.date.slice(0, 7)}</dd>` +
       `<dt>최저점</dt><dd>${fmtUSD(r.trough.price)} · ${r.trough.date.slice(0, 7)}</dd>` +
@@ -370,19 +445,23 @@ function bind() {
     } else if (key === 'variant') {
       state.variant = b.dataset.v;
     } else if (key === 'scen') {
-      state.scen = Number(b.dataset.v);
+      state.scen = b.dataset.v;
     } else {
       state[key] = b.dataset.v;
     }
     saveView(); render().catch(showError);
   }));
+  $('taScens').addEventListener('click', (ev) => {
+    const el = ev.target.closest('[data-scen]'); if (!el) return;
+    state.scen = el.dataset.scen; saveView(); render().catch(showError);
+  });
   $('cmpTable').addEventListener('click', (ev) => {
     const tr = ev.target.closest('tr[data-model]'); if (!tr) return;
     state.model = tr.dataset.model; saveView(); render().catch(showError);
   });
   $('longGroups').addEventListener('click', (ev) => {
     const el = ev.target.closest('[data-scen]'); if (!el) return;
-    state.scen = Number(el.dataset.scen); saveView(); render().catch(showError);
+    state.scen = el.dataset.scen; saveView(); render().catch(showError);
   });
   $('themeBtn').addEventListener('click', () => setTheme(THEMES[(THEMES.indexOf(currentTheme()) + 1) % 3]));
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => chart?.applyTheme());

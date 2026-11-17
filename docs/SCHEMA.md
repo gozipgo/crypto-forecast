@@ -1,4 +1,4 @@
-# 결과 JSON 형식 (schema_version 1.x, 현재 1.2.0)
+# 결과 JSON 형식 (schema_version 1.x, 현재 1.3.0)
 
 계산 엔진(`engine/`)이 만들고, 웹 화면·SwiftUI 앱·위젯·알림이 **읽기만** 하는 파일들입니다.
 기계용 정의는 [`schema/forecast.v1.schema.json`](../schema/forecast.v1.schema.json)(JSON Schema 2020-12)이며,
@@ -11,6 +11,7 @@
 - 공통 규칙: 시각은 UTC ISO-8601(`2026-11-17T05:00:00Z`) 또는 UNIX 초, 가격은 USD 숫자, 확률·비율은 0~1 소수.
 
 ## 변경 이력
+- **1.3.0** (하위호환 추가): `forecast.json`의 `ta_scenarios.{1h,4h,1d,1w,1M}` — 차트 기술적 분석으로 만든 시나리오 2개(주·대안)와 가상 캔들, 근거 체크리스트, 통계 모델 교차 확인, 백테스트.
 - **1.2.0** (하위호환 추가): `long_term.variants.{shrunk,zero,historical}`(추세 가정별 전체 결과: `label_ko`, `drift_annual`, `horizons`, `fan`, `scenario_groups`, `top_scenarios`, `calibration`), `long_term.default_variant`, `long_term.drift_note_ko`, 묶음별 `typical_max_drawdown`, 장기 백테스트 `above_median`. 최상위 `long_term.horizons` 등은 기본 가정(`shrunk`)과 같습니다.
 - **1.1.0** (하위호환 추가): 주봉·월봉 `candles_1w.json`·`candles_1M.json`, `technicals.1w/1M`, `sources.1w/1M`,
   `forecast.json`의 `long_term`(최대 5년 전망·시나리오), `summary.json`의 `long_term_top`.
@@ -94,6 +95,34 @@ data/
 `calibration.{91,182,365}.above_median`: 실제 가격이 예측 중앙값보다 높았던 비율(0.5가 이상적).
 
 `prob`는 "그 경로가 그대로 일어날 확률"이 아니라 **비슷한 모양의 경로들이 차지하는 비율**입니다.
+
+### ta_scenarios (1.3.0, 봉별 차트 기술적 분석 시나리오)
+확률 모델이 아니라 차트 규칙(다우 이론 고점·저점 구조, 지그재그 스윙, 지지·저항과 역할 전환, 피보나치 되돌림·확장, 측정 이동,
+이동평균·MACD·RSI·볼린저·거래량 근거)으로 그린 경로입니다. 봉마다 하나씩(`1h`,`4h`,`1d` = 30일, `1w` = 1년, `1M` = 5년).
+
+| 필드 | 설명 |
+|---|---|
+| `structure` | `code`(`HH_HL` 상승 구조, `LH_LL` 하락 구조, `HH_LL` 확산, `LH_HL` 수렴, `unknown`), `label_ko`, `pivots[]`(최근 스윙 `t`,`price`,`type` high/low) |
+| `evidence` | `items[]`(`key`,`name_ko`,`signal` +1 상승/-1 하락/0 중립,`text_ko`), `bull`,`bear`,`neutral`, `score`(=(bull-bear)/개수). 점수 ±0.25 이상이면 주 시나리오가 추세형, 아니면 박스권 |
+| `swing` | 최근 스윙 통계: `median_leg_up_pct`, `median_leg_down_pct`, `median_leg_bars`, `zigzag_atr`, `n_legs` |
+| `scenarios[2]` | [0] = 주(`role: primary`), [1] = 대안(`alternate`). 아래 참고 |
+| `stat_model_ko` | 교차 확인에 쓴 통계 모델 |
+| `backtest` | 과거 각 시점에서 그때까지의 봉만으로 주 시나리오를 만들고 `horizon_bars`봉 안에 1차 목표와 무효화 중 무엇이 먼저 닿았는지: `n`, `period`, `target_first`, `invalidation_first`, `neither`, `target_first_resolved`(둘 중 하나가 닿은 경우 중 목표가 먼저인 비율), `baseline_resolved`(방향 없는 무작위라면 기대값 = 무효화 거리/(두 거리 합)의 평균), `range_n`, `range_kept`. 월봉은 `null` |
+
+`scenarios[]` 항목:
+| 필드 | 설명 |
+|---|---|
+| `kind` | `trend`(추세 지속), `reversal`(추세 전환), `range`(박스권), `breakout`(박스 돌파) |
+| `direction` | `up` / `down` / `range` |
+| `label_ko`, `text_ko` | 제목, 단계 요약(①→②→… + 무효화) |
+| `evidence_share` | 이 시나리오 방향을 지지하는 근거 비중(확률 아님) |
+| `first_target` | `price`, `change`(현재가 대비), `note_ko`(어떤 근거의 가격인지) |
+| `furthest` | 기간 안 가장 멀리 간 경유점(박스권이면 `null`) |
+| `invalidation` | 이 가격을 넘어 마감하면 시나리오 무효: `price`, `change`, `note_ko`. 박스권은 `null` |
+| `box` | 박스권일 때 `[하단, 상단]`, 아니면 `null` |
+| `steps[]` | 경유점: `t`(UNIX 초), `bars`(몇 봉 뒤), `price`, `kind`(pullback·impulse·correction·target·retest·range), `note_ko` |
+| `candles` | 가상 캔들 `t,o,h,l,c`. `t`는 미래 봉 시작 시각(해당 봉 단위) |
+| `stat_check` | 통계 모델 경로로 본 `days`일 안 `target_touch`, `invalidation_touch`, `target_first`(목표가 무효화보다 먼저), 박스권이면 `box_kept` |
 
 ### calibration
 `calibration.models.{모델}.{7,14,30}`:

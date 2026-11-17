@@ -53,6 +53,10 @@ export class PriceChart {
     this.ma = { sma20: this.chart.addSeries(LWC.LineSeries, line(1)), sma50: this.chart.addSeries(LWC.LineSeries, line(1)),
       sma200: this.chart.addSeries(LWC.LineSeries, line(2)) };
     this.scen = this.chart.addSeries(LWC.CandlestickSeries, { priceLineVisible: false, lastValueVisible: false });
+    // 다른 시나리오: 종가만 점선으로
+    this.scenAlt = this.chart.addSeries(LWC.LineSeries, { lineWidth: 1, lineStyle: LWC.LineStyle.Dashed, lastValueVisible: false,
+      priceLineVisible: false, crosshairMarkerVisible: false });
+    this.scenLines = [];
     this.fan = new FanPrimitive();
     this.candles.attachPrimitive(this.fan);
     this.priceLines = [];
@@ -75,12 +79,14 @@ export class PriceChart {
     const su = alpha(c.up, 0.45), sd = alpha(c.down, 0.45);
     this.scen.applyOptions({ upColor: su, downColor: sd, borderUpColor: alpha(c.up, 0.8), borderDownColor: alpha(c.down, 0.8),
       wickUpColor: alpha(c.up, 0.6), wickDownColor: alpha(c.down, 0.6) });
+    this.scenAlt.applyOptions({ color: alpha(c.text.startsWith('#') ? c.text : '#8a93a6', 0.8) });
     this.ma.sma20.applyOptions({ color: c.ma20 });
     this.ma.sma50.applyOptions({ color: c.ma50 });
     this.ma.sma200.applyOptions({ color: c.ma200 });
     if (this.data) this._setVolume();
     this.fan.setData(this.fanPoints, c.fan.replace(/\s/g, ''), c.accent);
     this._drawLevels();
+    this._drawScenLines();
   }
 
   /**
@@ -143,6 +149,15 @@ export class PriceChart {
     }
     this.scen.applyOptions({ priceFormat: pf, title: o.scenarioTitle || '' , lastValueVisible: !!sbars.length });
     this.scen.setData(sbars);
+    const alt = o.scenarioAlt;
+    const abars = [];
+    if (alt) {
+      abars.push({ time: lastT, value: k.c[n - 1] });
+      for (let i = 0; i < alt.t.length; i++) if (alt.t[i] > lastT && alt.t[i] <= lastFuture) abars.push({ time: alt.t[i], value: alt.c[i] });
+    }
+    this.scenAlt.applyOptions({ priceFormat: pf });
+    this.scenAlt.setData(abars);
+    this._drawScenLines();
 
     this.fanPoints = pts;
     this.fan.setData(pts, this.colors.fan.replace(/\s/g, ''), this.colors.accent);
@@ -177,6 +192,18 @@ export class PriceChart {
       this.priceLines.push(this.candles.createPriceLine({
         price: lv.price, color: alpha(sup ? this.colors.down : this.colors.up, 0.75), lineWidth: 1,
         lineStyle: LWC.LineStyle.Dashed, axisLabelVisible: true, title: sup ? '지지' : '저항',
+      }));
+    }
+  }
+
+  // 선택한 기술적 시나리오의 목표·무효화 가격선
+  _drawScenLines() {
+    for (const pl of this.scenLines) this.scen.removePriceLine(pl);
+    this.scenLines = [];
+    for (const m of this.data?.scenarioMarks || []) {
+      this.scenLines.push(this.scen.createPriceLine({
+        price: m.price, color: m.kind === 'inv' ? alpha(this.colors.text.startsWith('#') ? this.colors.text : '#8a93a6', 0.9) : this.colors.accent,
+        lineWidth: 1, lineStyle: m.kind === 'inv' ? LWC.LineStyle.SparseDotted : LWC.LineStyle.LargeDashed, axisLabelVisible: true, title: m.title,
       }));
     }
   }

@@ -58,7 +58,7 @@
         <span class="ctl-label">추세</span>
         <div class="seg" data-ctl="variant"></div>
       </div>
-      <div class="ctl" id="scenRow" hidden>
+      <div class="ctl" id="scenRow">
         <span class="ctl-label">경로</span>
         <div class="seg" data-ctl="scen"></div>
       </div>
@@ -75,10 +75,22 @@
       <div class="legend" id="legend"></div>
       <div class="chart-keys">
         <span><i class="k k95"></i>95%</span><span><i class="k k80"></i>80%</span><span><i class="k k50"></i>50%</span>
-        <span><i class="k kmed"></i>중앙값</span><span id="keyScen" hidden><i class="k kscen"></i>가상 캔들</span>
+        <span><i class="k kmed"></i>중앙값</span><span id="keyScen" hidden><i class="k kscen"></i>가상 캔들</span><span id="keyAlt" hidden><i class="k kalt"></i>다른 시나리오</span>
         <span><i class="k kma20"></i>MA20</span><span><i class="k kma50"></i>MA50</span><span><i class="k kma200"></i>MA200</span>
       </div>
       <p class="hint">두 손가락으로 확대·축소, 좌우로 밀어 이동. 차트를 누르면 그 시점 값이 보여요.</p>
+    </section>
+
+    <section class="card" id="taCard" hidden>
+      <h2>차트로 본 시나리오 2개 <small id="taSub"></small></h2>
+      <div class="ta-struct" id="taStruct"></div>
+      <div id="taScens"></div>
+      <details class="ta-ev">
+        <summary>근거 체크리스트 <span id="taEvSum"></span></summary>
+        <ul class="ind" id="taEvidence"></ul>
+      </details>
+      <div class="ta-bt" id="taBt"></div>
+      <p class="note" id="taNote"></p>
     </section>
 
     <section class="card" id="scenarioCard">
