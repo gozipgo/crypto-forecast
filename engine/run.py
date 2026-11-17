@@ -20,7 +20,7 @@ from .models import analog, ensemble, longterm, montecarlo
 from .models.common import HORIZONS, recalibrate, summarize
 from .technicals import analyze_tf, candles_payload
 
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 TIMEFRAMES = ("1h", "4h", "1d", "1w", "1M")
 ASSETS = ["BTC", "ETH"]
 DISCLAIMER = "투자 조언이 아니며, 확률은 과거 데이터에 기반한 통계적 추정입니다."
@@ -80,7 +80,10 @@ def build_asset(asset: str, out: Path, cache_min: float, generated_at: str) -> d
     t2 = time.time()
     now = h1.index[-1] + pd.Timedelta(hours=1)
     long_term = longterm.forecast(daily, price, now, {"1w": data["1w"].index[-1], "1M": data["1M"].index[-1]}, lv)
-    long_term["calibration"] = longterm.backtest(daily)
+    lbt = longterm.backtest(daily)
+    for kind, v in long_term["variants"].items():
+        v["calibration"] = lbt[kind]
+    long_term["calibration"] = lbt[long_term["default_variant"]]
     log.info("%s 장기 전망 %.1fs", asset, time.time() - t2)
 
     # 24시간 변동: 1시간봉 기준 24봉 전 종가 대비

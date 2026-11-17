@@ -1,4 +1,4 @@
-# 결과 JSON 형식 (schema_version 1.x, 현재 1.1.0)
+# 결과 JSON 형식 (schema_version 1.x, 현재 1.2.0)
 
 계산 엔진(`engine/`)이 만들고, 웹 화면·SwiftUI 앱·위젯·알림이 **읽기만** 하는 파일들입니다.
 기계용 정의는 [`schema/forecast.v1.schema.json`](../schema/forecast.v1.schema.json)(JSON Schema 2020-12)이며,
@@ -11,6 +11,7 @@
 - 공통 규칙: 시각은 UTC ISO-8601(`2026-11-17T05:00:00Z`) 또는 UNIX 초, 가격은 USD 숫자, 확률·비율은 0~1 소수.
 
 ## 변경 이력
+- **1.2.0** (하위호환 추가): `long_term.variants.{shrunk,zero,historical}`(추세 가정별 전체 결과: `label_ko`, `drift_annual`, `horizons`, `fan`, `scenario_groups`, `top_scenarios`, `calibration`), `long_term.default_variant`, `long_term.drift_note_ko`, 묶음별 `typical_max_drawdown`, 장기 백테스트 `above_median`. 최상위 `long_term.horizons` 등은 기본 가정(`shrunk`)과 같습니다.
 - **1.1.0** (하위호환 추가): 주봉·월봉 `candles_1w.json`·`candles_1M.json`, `technicals.1w/1M`, `sources.1w/1M`,
   `forecast.json`의 `long_term`(최대 5년 전망·시나리오), `summary.json`의 `long_term_top`.
 - **1.0.0**: 최초 버전.
@@ -88,6 +89,9 @@ data/
 | `scenario_groups[5]` | 경로 모양(3개월 간격 20개 지점) k-means 5개 묶음, 확률 큰 순. `rank`, `prob`, `label_ko`(예: 박스권 횡보, 큰 하락, 폭등), `checkpoints[20]`(묶음 중심 경로: `day`, `price`), `end_range80` |
 | `top_scenarios[2]` | 상위 2개 묶음 + `representative`(대표 경로: `end_price`, `end_return`, `peak`, `trough`, `max_drawdown`), `candles.{1w,1M}`(가상 캔들 `t,o,h,l,c`), `text_ko` |
 | `calibration.{91,182,365}` | 장기 백테스트 포함률 `raw.cov50/80/95`, `n`, `independent_approx`(겹치지 않는 표본 수 근사). `1095`·`1826`은 `null`(검증 불가), `note_ko` |
+
+추세 가정별 결과는 `variants.{shrunk|zero|historical}` 에 같은 구조로 들어 있습니다. 기본은 `default_variant`.
+`calibration.{91,182,365}.above_median`: 실제 가격이 예측 중앙값보다 높았던 비율(0.5가 이상적).
 
 `prob`는 "그 경로가 그대로 일어날 확률"이 아니라 **비슷한 모양의 경로들이 차지하는 비율**입니다.
 

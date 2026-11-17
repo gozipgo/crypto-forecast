@@ -3,7 +3,7 @@ import { PriceChart } from './chart.js';
 
 const SUPPORTED_MAJOR = 1;
 const $ = (id) => document.getElementById(id);
-const state = { asset: 'BTC', tf: '4h', horizon: 14, model: 'ensemble', hLong: { '1w': 365, '1M': 1826 }, scen: 0 };
+const state = { asset: 'BTC', tf: '4h', horizon: 14, model: 'ensemble', hLong: { '1w': 365, '1M': 1826 }, scen: 0, variant: 'shrunk' };
 const cache = new Map();
 let manifest = null;
 let chart = null;
@@ -12,6 +12,7 @@ try { Object.assign(state, JSON.parse(localStorage.getItem('view') || '{}')); } 
 state.horizon = Number(state.horizon) || 14;
 state.hLong = { '1w': 365, '1M': 1826, ...(state.hLong || {}) };
 if (![0, 1, -1].includes(state.scen)) state.scen = 0;
+if (!['shrunk', 'zero', 'historical'].includes(state.variant)) state.variant = 'shrunk';
 // 주소로 보기 지정(공유·테스트용): ?asset=ETH&tf=1M&h=1826&scen=1
 {
   const q = new URLSearchParams(location.search);
@@ -20,6 +21,7 @@ if (![0, 1, -1].includes(state.scen)) state.scen = 0;
   if (q.get('h')) { const h = Number(q.get('h')); if (state.tf === '1w' || state.tf === '1M') state.hLong[state.tf] = h; else state.horizon = h; }
   if (q.get('scen') !== null && [0, 1, -1].includes(Number(q.get('scen')))) state.scen = Number(q.get('scen'));
   if (['ensemble', 'montecarlo', 'analog'].includes(q.get('model'))) state.model = q.get('model');
+  if (['shrunk', 'zero', 'historical'].includes(q.get('trend'))) state.variant = q.get('trend');
 }
 
 const MODEL_KO = { ensemble: '혼합', montecarlo: '몬테카를로', analog: '유사 패턴' };
@@ -31,6 +33,9 @@ const HZ = {
 };
 const isLong = () => state.tf === '1w' || state.tf === '1M';
 const curH = () => (isLong() ? state.hLong[state.tf] : state.horizon);
+// 장기 결과: 선택한 추세 가정의 값으로 덮어쓴 보기
+const longView = (fc) => ({ ...fc.long_term, ...(fc.long_term.variants?.[state.variant] || {}) });
+const VARIANT_SHORT = { shrunk: '줄인', zero: '0', historical: '과거' };
 const hzLabel = (h) => [...HZ.short, ...HZ['1w'], ...HZ['1M']].find(([v]) => v === h)?.[1] || `${h}일`;
 const IND_KO = { ma: '이동평균', rsi14: 'RSI', macd: 'MACD', bollinger: '볼린저', volume: '거래량' };
 
@@ -73,8 +78,16 @@ function buildSegs(fc) {
   }
   $('modelRow').hidden = isLong();
   $('scenRow').hidden = !isLong();
+  $('variantRow').hidden = !isLong() || !fc?.long_term?.variants;
   if (isLong() && fc) {
-    const top = fc.long_term.top_scenarios;
+    const vs = fc.long_term.variants;
+    if (vs) {
+      document.querySelector('[data-ctl="variant"]').innerHTML = ['shrunk', 'zero', 'historical'].map((k) => {
+        const d = vs[k].drift_annual;
+        return `<button data-v="${k}">${VARIANT_SHORT[k]} ${k === 'zero' ? '' : `${d >= 0 ? '+' : ''}${Math.round(d * 100)}%/년`}</button>`;
+      }).join('');
+    }
+    const top = longView(fc).top_scenarios;
     document.querySelector('[data-ctl="scen"]').innerHTML =
       top.map((g, i) => `<button data-v="${i}" title="${esc(g.label_ko)}">${i + 1}번 · ${pct0(g.prob)}</button>`).join('') +
       '<button data-v="-1">음영만</button>';
@@ -201,7 +214,7 @@ function renderScenarioBars(hz, fc, title, sub) {
 }
 
 function renderLong(fc, candles) {
-  const lt = fc.long_term;
+  const lt = longView(fc);
   const H = curH();
   const hz = lt.horizons[String(H)];
   for (const id of ['cmpCard', 'analogCard']) $(id).hidden = true;
@@ -216,7 +229,8 @@ function renderLong(fc, candles) {
     scenarioTitle: sel ? `시나리오 ${state.scen + 1}` : '',
   });
 
-  renderScenarioBars(hz, fc, `${hz.label_ko} 뒤 분포`, '장기 몬테카를로');
+  renderScenarioBars(hz, fc, `${hz.label_ko} 뒤 분포`, `장기 · ${lt.label_ko || ''}`);
+  $('longSub').textContent = `경로 모양별 5개 묶음 · ${lt.label_ko || ''}`;
 
   // 5개 묶음 목록 + 선택한 시나리오 상세
   $('longGroups').innerHTML = lt.scenario_groups.map((g, i) => {
@@ -240,7 +254,7 @@ function renderLong(fc, candles) {
   }
   $('longNote').textContent = `${lt.n_paths.toLocaleString()}개 가상 경로를 3개월 간격 모양으로 5개 묶음으로 나눈 비율입니다. ` +
     '시나리오가 "그대로" 일어날 확률이 아니라, 비슷한 모양의 경로들이 차지하는 비율이에요. 차트의 가상 캔들은 그 묶음의 대표 경로 하나입니다. ' +
-    `방법: ${lt.method_ko}. 추세를 0으로 둬서 중앙값은 현재가 근처입니다.`;
+    `방법: ${lt.method_ko}. ${lt.drift_note_ko || ''} 추세 가정을 바꿔도 묶음 비율은 같고(모든 경로가 같은 기울기로 움직임), 각 묶음의 가격 수준과 이름이 바뀝니다.`;
 
   renderLevels(fc, hz.level_touch, `${hz.label_ko} 안`);
   renderIndicators(fc);
@@ -258,7 +272,17 @@ function renderLong(fc, candles) {
           `<span class="cal-after" style="left:${v * 100}%"></span></div><span class="cal-val"><b>${pct0(v)}</b></span></div>`;
       }).join('');
   }
-  $('calNote').textContent = lt.calibration.note_ko + (cal ? ` (검증 ${cal.n}회, 실제로 겹치지 않는 표본은 약 ${cal.independent_approx}개)` : '');
+  // 추세 가정별 비교(같은 기간)
+  const vs = fc.long_term.variants;
+  if (cal && vs) {
+    $('calib').innerHTML += `<div class="table-wrap" style="margin-top:10px"><table class="tbl"><tr><th>추세 가정</th><th class="r">80% 구간 포함</th><th class="r">실제 &gt; 중앙값</th></tr>` +
+      ['shrunk', 'zero', 'historical'].map((k) => {
+        const c = vs[k].calibration[String(H)];
+        return `<tr class="${k === state.variant ? 'sel' : ''}"><td>${esc(vs[k].label_ko)}</td><td class="r">${pct0(c.raw.cov80)}</td><td class="r">${pct0(c.above_median)}</td></tr>`;
+      }).join('') + '</table></div>';
+  }
+  $('calNote').textContent = lt.calibration.note_ko + (cal ? ` (검증 ${cal.n}회, 실제로 겹치지 않는 표본은 약 ${cal.independent_approx}개.` +
+    ' "실제 > 중앙값"은 실제 가격이 예측 중앙값보다 높았던 비율로, 50%에 가까울수록 치우침이 없고 높을수록 예측이 비관적이었다는 뜻)' : '');
   renderMeta(fc);
 }
 
@@ -343,6 +367,8 @@ function bind() {
     const key = g.dataset.ctl;
     if (key === 'horizon') {
       if (isLong()) state.hLong[state.tf] = Number(b.dataset.v); else state.horizon = Number(b.dataset.v);
+    } else if (key === 'variant') {
+      state.variant = b.dataset.v;
     } else if (key === 'scen') {
       state.scen = Number(b.dataset.v);
     } else {

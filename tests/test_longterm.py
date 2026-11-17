@@ -54,3 +54,18 @@ def test_longterm_no_lookahead():
     d2.iloc[t + 1:] *= 5
     b = lt.returns_pool(d2.iloc[: t + 1])
     assert np.allclose(a["r"], b["r"])
+
+
+def test_drift_variants():
+    daily = make_ohlcv(n=1600, seed=8, drift=0.001)
+    price = float(daily["close"].iloc[-1])
+    bs = {"1w": resample_calendar(daily, "1w").index[-1], "1M": resample_calendar(daily, "1M").index[-1]}
+    r = lt.forecast(daily, price, daily.index[-1] + pd.Timedelta(hours=1), bs, [], n_paths=1200)
+    v = r["variants"]
+    assert r["default_variant"] == "shrunk" and r["horizons"] == v["shrunk"]["horizons"]
+    med = {k: v[k]["horizons"]["1826"]["quantiles"]["p50"] for k in v}
+    assert med["zero"] < med["shrunk"] < med["historical"]       # 추세가 클수록 중앙값이 높다
+    # 추세는 모든 경로를 같은 기울기로 옮기므로 묶음 비율은 같다
+    assert [g["prob"] for g in v["zero"]["scenario_groups"]] == [g["prob"] for g in v["historical"]["scenario_groups"]]
+    assert lt.drift(daily, "zero") == 0
+    assert abs(lt.drift(daily.iloc[:1001], "historical") - lt.drift(daily, "historical")) > 0  # 시점까지의 데이터만 사용

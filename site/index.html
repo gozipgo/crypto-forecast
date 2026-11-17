@@ -54,6 +54,10 @@
         <span class="ctl-label">예측</span>
         <div class="seg" data-ctl="horizon"></div>
       </div>
+      <div class="ctl" id="variantRow" hidden>
+        <span class="ctl-label">추세</span>
+        <div class="seg" data-ctl="variant"></div>
+      </div>
       <div class="ctl" id="scenRow" hidden>
         <span class="ctl-label">경로</span>
         <div class="seg" data-ctl="scen"></div>
@@ -84,7 +88,7 @@
     </section>
 
     <section class="card" id="longCard" hidden>
-      <h2>5년 시나리오 <small>경로 모양별 5개 묶음</small></h2>
+      <h2>5년 시나리오 <small id="longSub">경로 모양별 5개 묶음</small></h2>
       <div id="longGroups"></div>
       <div class="long-detail" id="longDetail"></div>
       <p class="note" id="longNote"></p>

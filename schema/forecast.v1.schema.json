@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gozipgo.github.io/crypto-forecast/schema/forecast.v1.schema.json",
   "title": "crypto-forecast 결과 JSON v1",
-  "description": "forecast.json / summary.json / manifest.json / candles_*.json 정의. 하위호환 추가는 minor, 삭제·의미 변경은 major. v1.1.0: 주봉·월봉, long_term(최대 5년) 추가.",
+  "description": "forecast.json / summary.json / manifest.json / candles_*.json 정의. 하위호환 추가는 minor, 삭제·의미 변경은 major. v1.1.0: 주봉·월봉, long_term(최대 5년) 추가. v1.2.0: long_term.variants(추세 가정 3가지), default_variant, typical_max_drawdown, 장기 백테스트 above_median.",
   "$defs": {
     "prob": {
       "type": "number",
@@ -802,6 +802,9 @@
         },
         "text_ko": {
           "type": "string"
+        },
+        "typical_max_drawdown": {
+          "type": "number"
         }
       }
     },
@@ -813,9 +816,109 @@
         "fan",
         "scenario_groups",
         "top_scenarios",
+        "calibration",
+        "default_variant",
+        "variants"
+      ],
+      "properties": {
+        "horizons": {
+          "type": "object",
+          "required": [
+            "91",
+            "182",
+            "365",
+            "1095",
+            "1826"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/longHorizon"
+          }
+        },
+        "fan": {
+          "type": "object",
+          "required": [
+            "1w",
+            "1M"
+          ],
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/fanPoint"
+            }
+          }
+        },
+        "scenario_groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scenarioGroup"
+          }
+        },
+        "top_scenarios": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/scenarioGroup"
+              },
+              {
+                "required": [
+                  "representative",
+                  "candles",
+                  "text_ko"
+                ]
+              }
+            ]
+          }
+        },
+        "calibration": {
+          "type": "object",
+          "required": [
+            "91",
+            "182",
+            "365",
+            "note_ko"
+          ]
+        },
+        "default_variant": {
+          "enum": [
+            "shrunk",
+            "zero",
+            "historical"
+          ]
+        },
+        "variants": {
+          "type": "object",
+          "required": [
+            "shrunk",
+            "zero",
+            "historical"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/longVariant"
+          }
+        }
+      }
+    },
+    "longVariant": {
+      "type": "object",
+      "required": [
+        "label_ko",
+        "drift_annual",
+        "horizons",
+        "fan",
+        "scenario_groups",
+        "top_scenarios",
         "calibration"
       ],
       "properties": {
+        "label_ko": {
+          "type": "string"
+        },
+        "drift_annual": {
+          "type": "number"
+        },
         "horizons": {
           "type": "object",
           "required": [
